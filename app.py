@@ -78,7 +78,8 @@ USUARIOS_DB = {
 }
 
 PACIENTES = [
-        "id": "p1",
+    {
+        "id": "p1",
         "nombre": "Carlos Benítez",
         "edad": 42,
         "programa": "Longevidad & Optimización Metabólica",
