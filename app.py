@@ -9,76 +9,75 @@ app.secret_key = 'aeterna_secret_key_2026_produccion_total'
 # ==========================================
 
 USUARIOS_DB = {
-    "pedro.calabrese": {
-        "pass": "aeterna2026", 
-        "pass_admin": "caja2026",
-        "nombre": "Dr. Pedro Calabrese", 
-        "rol_base": "medico", 
-        "es_socio": True,
-        "especialidad": "Traumatología y Ortopedia (Socio)"
-    },
-    "fatima.lopez": {
-        "pass": "aeterna2026", 
-        "pass_admin": "caja2026",
-        "nombre": "Dra. Fátima López", 
-        "rol_base": "medico", 
-        "es_socio": True,
-        "especialidad": "Traumatología y Ortopedia (Socio)"
-    },
-    "romina.espinola": {
-        "pass": "aeterna2026", 
-        "pass_admin": "caja2026",
-        "nombre": "Dra. Romina Espinola", 
-        "rol_base": "medico", 
-        "es_socio": True,
-        "especialidad": "Medicina Familiar - Pos Endocrinología (Socio)"
-    },
-    "ximena.ruiz": {
-        "pass": "aeterna2026", 
-        "nombre": "Lic. Ximena Ruiz", 
-        "rol_base": "medico", 
-        "es_socio": False,
-        "especialidad": "Nutricionista Clínica & Longevidad"
-    },
-    "alfredo.estigarribia": {
-        "pass": "aeterna2026", 
-        "nombre": "Dr. Alfredo Estigarribia", 
-        "rol_base": "medico", 
-        "es_socio": False,
-        "especialidad": "Odontología del Sueño"
-    },
-    "manuel.duarte": {
-        "pass": "aeterna2026", 
-        "nombre": "Manuel Duarte", 
-        "rol_base": "entrenador", 
-        "es_socio": False,
-        "especialidad": "Preparador Físico / Performance Coach"
-    },
-    "nadia.bortolace": {
-        "pass": "caja2026", 
-        "nombre": "Nadia Bortolace", 
-        "rol_base": "secretaria", 
-        "es_socio": False,
-        "especialidad": "Gestión Financiera & Facturación Sifen"
-    },
-    "daiana.gomez": {
-        "pass": "caja2026", 
-        "nombre": "Daiana Gomez", 
-        "rol_base": "secretaria", 
-        "es_socio": False,
-        "especialidad": "Gestión Financiera & Facturación Sifen"
-    },
-    "buro": {
-        "pass": "admin2026", 
-        "nombre": "Buró (Administración / Contabilidad)", 
-        "rol_base": "secretaria", 
-        "es_socio": False,
-        "especialidad": "Administración General & Facturación Sifen"
-    }
+    "pedro.calabrese": {
+        "pass": "aeterna2026", 
+        "pass_admin": "caja2026",
+        "nombre": "Dr. Pedro Calabrese", 
+        "rol_base": "medico", 
+        "es_socio": True,
+        "especialidad": "Traumatología y Ortopedia (Socio)"
+    },
+    "fatima.lopez": {
+        "pass": "aeterna2026", 
+        "pass_admin": "caja2026",
+        "nombre": "Dra. Fátima López", 
+        "rol_base": "medico", 
+        "es_socio": True,
+        "especialidad": "Traumatología y Ortopedia (Socio)"
+    },
+    "romina.espinola": {
+        "pass": "aeterna2026", 
+        "pass_admin": "caja2026",
+        "nombre": "Dra. Romina Espinola", 
+        "rol_base": "medico", 
+        "es_socio": True,
+        "especialidad": "Medicina Familiar - Pos Endocrinología (Socio)"
+    },
+    "ximena.ruiz": {
+        "pass": "aeterna2026", 
+        "nombre": "Lic. Ximena Ruiz", 
+        "rol_base": "medico", 
+        "es_socio": False,
+        "especialidad": "Nutricionista Clínica & Longevidad"
+    },
+    "alfredo.estigarribia": {
+        "pass": "aeterna2026", 
+        "nombre": "Dr. Alfredo Estigarribia", 
+        "rol_base": "medico", 
+        "es_socio": False,
+        "especialidad": "Odontología del Sueño"
+    },
+    "manuel.duarte": {
+        "pass": "aeterna2026", 
+        "nombre": "Manuel Duarte", 
+        "rol_base": "entrenador", 
+        "es_socio": False,
+        "especialidad": "Preparador Físico / Performance Coach"
+    },
+    "nadia.bortolace": {
+        "pass": "caja2026", 
+        "nombre": "Nadia Bortolace", 
+        "rol_base": "secretaria", 
+        "es_socio": False,
+        "especialidad": "Gestión Financiera & Facturación Sifen"
+    },
+    "daiana.gomez": {
+        "pass": "caja2026", 
+        "nombre": "Daiana Gomez", 
+        "rol_base": "secretaria", 
+        "es_socio": False,
+        "especialidad": "Gestión Financiera & Facturación Sifen"
+    },
+    "buro": {
+        "pass": "admin2026", 
+        "nombre": "Buró (Administración / Contabilidad)", 
+        "rol_base": "secretaria", 
+        "es_socio": False,
+        "especialidad": "Administración General & Facturación Sifen"
+    }
 }
 
 PACIENTES = [
-    {
         "id": "p1",
         "nombre": "Carlos Benítez",
         "edad": 42,
