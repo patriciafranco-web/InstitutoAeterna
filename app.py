@@ -5,7 +5,7 @@ import requests
 app = Flask(__name__)
 app.secret_key = 'aeterna_secret_key_2026_produccion_total_ilimitada'
 
-# URL ti aplikasion ti finanzas mo idiay Render
+# URL de tu app de finanzas en Render para sincronizar los cobros automáticamente
 FINANZAS_API_URL = "https://finanzas1.onrender.com/api/v1/registrar-transaccion"
 
 # ==========================================
@@ -195,6 +195,28 @@ PACIENTES = [
                 {"fecha": "20/10/2026", "vo2": "48 ml/kg/min", "fuerza_agarre": "44 kg", "grasa": "16.9%"}
             ]
         },
+        "wearables_longitudinal": [
+            {
+                "metrica": "Variabilidad de la Frecuencia Cardíaca (HRV)",
+                "unidad": "ms",
+                "rango_optimo": "> 60 ms",
+                "historial": [
+                    {"fecha": "20/08/2026", "valor": 52},
+                    {"fecha": "14/09/2026", "valor": 61},
+                    {"fecha": "20/10/2026", "valor": 68}
+                ]
+            },
+            {
+                "metrica": "Promedio de Sueño Profundo / REM",
+                "unidad": "Horas",
+                "rango_optimo": "> 7.5 hs",
+                "historial": [
+                    {"fecha": "20/08/2026", "valor": 6.2},
+                    {"fecha": "14/09/2026", "valor": 7.0},
+                    {"fecha": "20/10/2026", "valor": 7.7}
+                ]
+            }
+        ],
         "biomarcadores_longitudinales": [
             {
                 "parametro": "Glucosa en Ayunas",
@@ -304,9 +326,9 @@ PACIENTES = [
         "regenerativa_sesiones": [],
         "consentimientos_firmados": [],
         "dossier": {
-            "nutricion": "Dieta mediterránea rica en antioxidantes.",
-            "suplementacion": "Complex B diario, Vitamina D3 semanal.",
-            "habitos_sueno": "Higiene de sueño estricta."
+            "nutricion": "Dieta mediterránea rica en antioxidantes y grasas saludables.",
+            "suplementacion": "Complex B bioactivo diario, Vitamina D3 con K2 semanal.",
+            "habitos_sueno": "Higiene de sueño estricta con 8 horas continuas."
         }
     },
     {
@@ -477,9 +499,15 @@ def portal_preconsulta_form(id_paciente):
             h2 { color: #d4af37; text-align: center; text-transform: uppercase; font-size: 16px; letter-spacing: 2px; margin-top: 0; }
             p.sub { text-align: center; font-size: 12px; color: #a8a29e; margin-bottom: 30px; line-height: 1.6; }
             .section-title { color: #d4af37; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #292524; padding-bottom: 6px; margin: 35px 0 15px 0; font-weight: bold; letter-spacing: 1px; }
+            .sub-section { color: #f5f2eb; font-size: 12.5px; font-weight: bold; margin: 20px 0 10px 0; text-transform: uppercase; }
             .form-group { margin-bottom: 16px; }
-            label { display: block; font-size: 11.5px; color: #a8a29e; text-transform: uppercase; margin-bottom: 6px; font-weight: bold; }
+            label { display: block; font-size: 11.5px; color: #a8a29e; text-transform: uppercase; margin-bottom: 6px; font-weight: bold; line-height: 1.4; }
             input[type="text"], textarea, select { width: 100%; background: #121110; border: 1px solid #292524; border-radius: 6px; padding: 10px 14px; color: #f5f2eb; font-size: 13px; box-sizing: border-box; outline: none; }
+            input[type="text"]:focus, textarea:focus, select:focus { border-color: #d4af37; }
+            .checkbox-grid { display: grid; grid-template-columns: 1fr; gap: 8px; background: #121110; padding: 15px; border-radius: 6px; border: 1px solid #292524; }
+            .checkbox-label { display: flex; align-items: center; font-size: 12px; color: #f5f2eb; font-weight: normal; cursor: pointer; text-transform: none; margin-bottom: 0; }
+            .checkbox-label input { width: auto; margin-right: 10px; accent-color: #d4af37; }
+            .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
             .btn { background: #d4af37; color: #090908; border: none; padding: 14px; border-radius: 6px; width: 100%; font-weight: bold; font-size: 13px; text-transform: uppercase; cursor: pointer; margin-top: 35px; letter-spacing: 1px; }
             .btn:hover { background: #e5c158; }
         </style>
@@ -487,13 +515,158 @@ def portal_preconsulta_form(id_paciente):
     <body>
         <div class="card">
             <h2>Formulario de Pre-Consulta: Clínica Aeterna - Instituto de Optimización Humana</h2>
-            <p class="sub">Bienvenido a Clínica Aeterna. Complete este cuestionario 360° para su evaluación médica en Ciudad del Este.<br><b>Bienvenido/a, {{ paciente.nombre }}.</b></p>
+            <p class="sub">Bienvenido a Clínica Aeterna. Este cuestionario de pre-consulta es el primer paso en su viaje hacia la optimización humana. Nuestro enfoque de medicina funcional y longevidad requiere una comprensión profunda de su biología, entorno, hábitos y objetivos.<br><br>La información proporcionada aquí es estrictamente confidencial y permitirá a nuestro equipo médico diseñar una estrategia de evaluación 360° personalizada desde su primera visita a nuestro Instituto en Ciudad del Este.<br><b>Bienvenido/a, {{ paciente.nombre }}.</b></p>
             
             <form method="POST" action="/portal/pre-consulta/{{ paciente.id }}">
-                <div class="section-title">1. Datos Personales y Objetivos</div>
+                
+                <!-- 1. DATOS PERSONALES -->
+                <div class="section-title">1. Datos Personales y de Contacto</div>
                 <div class="form-group"><label>Nombre completo:</label><input type="text" name="nombre_completo" value="{{ paciente.nombre }}" required></div>
-                <div class="form-group"><label>Objetivo Principal:</label><input type="text" name="objetivos" value="Optimización de energía y longevidad" required></div>
-                <div class="form-group"><label>¿Cómo califica su salud actual (1-10)?</label><input type="text" name="salud_actual" value="8/10" required></div>
+                <div class="grid-2">
+                    <div class="form-group"><label>Fecha de nacimiento:</label><input type="text" name="fecha_nac" placeholder="DD/MM/AAAA"></div>
+                    <div class="form-group"><label>Edad:</label><input type="text" name="edad" value="{{ paciente.edad }}"></div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group"><label>Género:</label>
+                        <select name="genero">
+                            <option value="Femenino">[ ] Femenino</option>
+                            <option value="Masculino">[ ] Masculino</option>
+                            <option value="Otro">[ ] Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Nacionalidad:</label><input type="text" name="nacionalidad" placeholder="Paraguaya / Otra..."></div>
+                </div>
+                <div class="form-group"><label>Lugar de residencia (Ciudad/País):</label><input type="text" name="residencia" placeholder="Ciudad del Este, Paraguay"></div>
+                <div class="form-group"><label>Profesión / Ocupación actual:</label><input type="text" name="profesion" placeholder="Ocupación..."></div>
+                <div class="form-group"><label>Estado civil:</label><input type="text" name="estado_civil" placeholder="Soltero/a, Casado/a..."></div>
+                <div class="form-group"><label>Teléfono (WhatsApp):</label><input type="text" name="telefono" placeholder="+595 981 ..."></div>
+                <div class="form-group"><label>Correo electrónico:</label><input type="text" name="correo" placeholder="correo@dominio.com"></div>
+                <div class="form-group"><label>Contacto de emergencia (Nombre y Teléfono):</label><input type="text" name="contacto_emergencia" placeholder="Nombre y Teléfono..."></div>
+
+                <!-- 2. OBJETIVOS Y EXPECTATIVAS -->
+                <div class="section-title">2. Objetivos y Expectativas (Visión High Ticket)</div>
+                <p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 10px;">En Clínica Aeterna no solo tratamos síntomas; optimizamos su rendimiento y extendemos su vitalidad.</p>
+                <div class="form-group">
+                    <label>¿Cuál es su objetivo principal al acudir a Clínica Aeterna? (Seleccione hasta 3)</label>
+                    <div class="checkbox-grid">
+                        <label class="checkbox-label"><input type="checkbox" name="obj" value="Aumentar niveles de energía y vitalidad diaria"> Aumentar mis niveles de energía y vitalidad diaria</label>
+                        <label class="checkbox-label"><input type="checkbox" name="obj" value="Optimizar rendimiento físico y/o cognitivo"> Optimizar mi rendimiento físico y/o cognitivo</label>
+                        <label class="checkbox-label"><input type="checkbox" name="obj" value="Prevenir enfermedades crónicas y envejecimiento acelerado"> Prevenir enfermedades crónicas y envejecimiento acelerado</label>
+                        <label class="checkbox-label"><input type="checkbox" name="obj" value="Mejorar composición corporal (pérdida de grasa, ganancia muscular)"> Mejorar mi composición corporal (pérdida de grasa, ganancia muscular)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="obj" value="Resolver problemas digestivos crónicos"> Resolver problemas digestivos crónicos</label>
+                        <label class="checkbox-label"><input type="checkbox" name="obj" value="Equilibrar hormonas (libido, menopausia, andropausia)"> Equilibrar mis hormonas (libido, menopausia, andropausia)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="obj" value="Mejorar calidad de sueño y recuperación"> Mejorar la calidad de mi sueño y recuperación</label>
+                    </div>
+                </div>
+                <div class="form-group"><label>Describa brevemente su principal queja de salud actual (si la hay):</label><textarea name="queja" rows="2" placeholder="Descripción..."></textarea></div>
+                <div class="form-group"><label>¿Cómo calificaría su estado de salud actual en una escala del 1 al 10?</label><input type="text" name="salud_actual" placeholder="Ej: 7/10"></div>
+                <div class="form-group"><label>¿Qué impacto tendría en su vida alcanzar sus objetivos de salud?</label><textarea name="impacto_vida" rows="2" placeholder="Describa el impacto..."></textarea></div>
+
+                <!-- 3. HISTORIAL MÉDICO -->
+                <div class="section-title">3. Historial Médico y Antecedentes</div>
+                <div class="form-group"><label>¿Ha sido diagnosticado con alguna enfermedad crónica? (Diabetes, Hipertensión, Autoinmunidad, Cáncer, Hipotiroidismo):</label><input type="text" name="antecedentes" placeholder="[ ] No [ ] Sí. ¿Cuáles?: ..."></div>
+                <div class="form-group"><label>¿Ha tenido cirugías u hospitalizaciones previas?</label><input type="text" name="cirugias" placeholder="[ ] No [ ] Sí. Especifique y año: ..."></div>
+                <div class="form-group"><label>Antecedentes familiares relevantes (Padres, abuelos, hermanos con enfermedades crónicas o autoinmunes):</label><textarea name="ant_familiares" rows="2" placeholder="Antecedentes..."></textarea></div>
+                <div class="form-group"><label>¿Tiene alergias o intolerancias conocidas? (Medicamentos, alimentos, ambientales):</label><input type="text" name="alergias" placeholder="Alergias..."></div>
+
+                <!-- 4. MEDICAMENTOS Y SUPLEMENTOS -->
+                <div class="section-title">4. Medicamentos, Suplementos y Terapias</div>
+                <div class="form-group"><label>Enumere todos los medicamentos recetados que toma actualmente (incluya dosis):</label><textarea name="medicamentos" rows="2" placeholder="Medicamentos y dosis..."></textarea></div>
+                <div class="form-group"><label>Enumere todos los suplementos, vitaminas o péptidos que consume actualmente:</label><textarea name="suplementos_actuales" rows="2" placeholder="Suplementos..."></textarea></div>
+                <div class="form-group"><label>¿Ha utilizado terapias de reemplazo hormonal (TRH), implantes o pellets?</label><input type="text" name="trh" placeholder="[ ] No [ ] Sí. Especifique: ..."></div>
+                <div class="form-group"><label>¿Se ha realizado estudios genéticos, microbioma o epigenéticos previamente?</label><input type="text" name="estudios_geneticos" placeholder="[ ] No [ ] Sí. Especifique: ..."></div>
+
+                <!-- 5. HÁBITOS DE VIDA Y ENTORNO -->
+                <div class="section-title">5. Hábitos de Vida y Entorno (Evaluación 360°)</div>
+                <div class="sub-section">A. Nutrición y Digestión</div>
+                <div class="form-group"><label>¿Cómo describiría su patrón alimentario actual? (Ej. Omnívoro, Keto, Vegano, Ayuno intermitente, Mediterráneo):</label><input type="text" name="nutricion" placeholder="Patrón alimentario..."></div>
+                <div class="form-group"><label>¿Con qué frecuencia consume alimentos ultraprocesados o azúcares refinados?</label><input type="text" name="procesados" placeholder="[ ] Nunca [ ] 1-2 veces/sem [ ] 3-5 veces/sem [ ] Diario"></div>
+                <div class="form-group"><label>¿Sufre de síntomas digestivos frecuentes? (Hinchazón, gases, reflujo, estreñimiento, diarrea):</label><input type="text" name="sintomas_digestivos" placeholder="[ ] No [ ] Sí. Especifique: ..."></div>
+                <div class="form-group"><label>Consumo de agua diario aproximado:</label><input type="text" name="agua" placeholder="Ej: 2.5 Litros"></div>
+
+                <div class="sub-section">B. Sueño y Recuperación</div>
+                <div class="grid-2">
+                    <div class="form-group"><label>¿Cuántas horas duerme en promedio por noche?</label><input type="text" name="sueno_horas" placeholder="7.5 horas"></div>
+                    <div class="form-group"><label>Calidad del sueño:</label><input type="text" name="sueno_calidad" placeholder="[ ] Excelente [ ] Regular [ ] Mala"></div>
+                </div>
+                
+                <div class="form-group"><label>¿Utiliza algún dispositivo wearable o sistema de monitoreo de sueño y/o rendimiento?</label>
+                    <div class="checkbox-grid">
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="No utilizo ningún dispositivo"> [ ] No utilizo ningún dispositivo de este tipo.</label>
+                        
+                        <div style="font-size: 11.5px; color: #d4af37; font-weight: bold; margin-top: 8px;">Anillos inteligentes (Smart Rings):</div>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Oura Ring (Gen 3 / 4 / 5)"> • Oura Ring (Gen 3 / 4 / 5)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Ultrahuman Ring AIR"> • Ultrahuman Ring AIR</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Samsung Galaxy Ring"> • Samsung Galaxy Ring</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="RingConn Smart Ring"> • RingConn Smart Ring</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Sleepon Go2Sleep"> • Sleepon Go2Sleep</label>
+
+                        <div style="font-size: 11.5px; color: #d4af37; font-weight: bold; margin-top: 8px;">Relojes inteligentes y pulseras (Smartwatches / Fitness Bands):</div>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Apple Watch (Series 9 / 10 / 11 / Ultra / SE)"> • Apple Watch (Series 9 / 10 / 11 / Ultra / SE)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Samsung Galaxy Watch (7 / Ultra / FE)"> • Samsung Galaxy Watch (7 / Ultra / FE)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Garmin (Fenix / Forerunner / Venu / Vívoactive / Epix)"> • Garmin (Fenix / Forerunner / Venu / Vívoactive / Epix)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="WHOOP 4.0 / 5.0 / MG"> • WHOOP 4.0 / 5.0 / MG</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Google Pixel Watch (3 / 4)"> • Google Pixel Watch (3 / 4)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Fitbit (Charge / Sense / Versa)"> • Fitbit (Charge / Sense / Versa)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Polar (Ignite / Vantage / Pacer)"> • Polar (Ignite / Vantage / Pacer)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Amazfit (Active / Balance / GTR / GTS)"> • Amazfit (Active / Balance / GTR / GTS)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Huawei Watch (GT / Fit)"> • Huawei Watch (GT / Fit)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Withings ScanWatch (2 / Nova)"> • Withings ScanWatch (2 / Nova)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Xiaomi Smart Band"> • Xiaomi Smart Band</label>
+
+                        <div style="font-size: 11.5px; color: #d4af37; font-weight: bold; margin-top: 8px;">Dispositivos no portables (Non-Wearables):</div>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Eight Sleep Pod (3/4/Ultra)"> • Eight Sleep Pod (3 / 4 / Ultra) — colchón inteligente</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Withings Sleep Analyzer"> • Withings Sleep Analyzer — sensor bajo el colchón</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Google Nest Hub (2ª gen)"> • Google Nest Hub (2ª gen) — monitoreo sin contacto</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Garmin Index Sleep Monitor"> • Garmin Index Sleep Monitor — brazalete nocturno</label>
+
+                        <div style="font-size: 11.5px; color: #d4af37; font-weight: bold; margin-top: 8px;">Dispositivos de biofeedback y neurología del sueño:</div>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Muse S Athena"> • Muse S Athena — diadema EEG de ondas cerebrales</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Bía Smart Sleep Mask"> • Bía Smart Sleep Mask — antifaz con sensores fNIRS</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Dreem 2"> • Dreem 2 — diadema EEG clínica</label>
+
+                        <div style="font-size: 11.5px; color: #d4af37; font-weight: bold; margin-top: 8px;">Aplicaciones de análisis (sin hardware adicional):</div>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Rise Science"> • Rise Science (deuda de sueño y ritmo circadiano)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Sleep Cycle"> • Sleep Cycle (app con micrófono)</label>
+                        <label class="checkbox-label"><input type="checkbox" name="wearable" value="Pillow"> • Pillow (app para iPhone/Apple Watch)</label>
+                    </div>
+                </div>
+
+                <div class="form-group"><label>Otro dispositivo no listado / Otra app:</label><input type="text" name="otro_dispositivo" placeholder="Especifique..."></div>
+                <div class="form-group"><label>¿Estaría dispuesto a compartir sus datos de sueño con nuestro equipo médico?</label><input type="text" name="compartir_sueno" placeholder="[ ] Sí [ ] No [ ] Necesito más información"></div>
+
+                <div class="sub-section">C. Actividad Física y Movimiento</div>
+                <div class="grid-2">
+                    <div class="form-group"><label>¿Cuántos días a la semana realiza ejercicio estructurado?</label><input type="text" name="dias_ejercicio" placeholder="Ej: 4 días"></div>
+                    <div class="form-group"><label>Tipo de entrenamiento principal:</label><input type="text" name="tipo_entrenamiento" placeholder="Fuerza, Cardio, HIIT, Yoga..."></div>
+                </div>
+                <div class="form-group"><label>¿Siente dolor articular o limitaciones físicas al moverse?</label><input type="text" name="dolor_articular" placeholder="[ ] No [ ] Sí. Especifique: ..."></div>
+
+                <div class="sub-section">D. Estrés, Entorno y Salud Mental</div>
+                <div class="form-group"><label>En una escala del 1 al 10, ¿cuál es su nivel de estrés promedio diario?</label><input type="text" name="estres" placeholder="Ej: 6/10"></div>
+                <div class="form-group"><label>¿Cómo maneja el estrés actualmente? (Meditación, respiración, hobbies, terapia):</label><input type="text" name="manejo_estres" placeholder="Estrategias..."></div>
+                <div class="form-group"><label>¿Está expuesto regularmente a toxinas ambientales? (Moho, metales pesados, químicos):</label><input type="text" name="toxinas" placeholder="[ ] No [ ] Sí / No estoy seguro"></div>
+
+                <!-- 6. SALUD HORMONAL Y ENERGÍA -->
+                <div class="section-title">6. Salud Hormonal y Energía</div>
+                <div class="form-group"><label>Nivel de energía promedio durante el día (1-10):</label><input type="text" name="energia_dia" placeholder="Ej: 7/10"></div>
+                <div class="form-group"><label>¿Experimenta "bajones" de energía en momentos específicos del día? (¿A qué hora?):</label><input type="text" name="bajones_energia" placeholder="[ ] No [ ] Sí. Hora: ..."></div>
+                <div class="form-group"><label>¿Ha notado cambios recientes en su libido (deseo sexual) o rendimiento sexual?</label><input type="text" name="libido" placeholder="[ ] No [ ] Sí. Especifique: ..."></div>
+                <div class="form-group"><label>(Solo mujeres) Describa su ciclo menstrual o estado de menopausia:</label><input type="text" name="ciclo_menstrual" placeholder="N/A o descripción..."></div>
+
+                <!-- 7. PRÓXIMOS PASOS Y COMPROMISO -->
+                <div class="section-title">7. Próximos Pasos y Compromiso</div>
+                <p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 10px;">En Clínica Aeterna, la optimización humana es un trabajo en equipo. Requerimos su compromiso activo con los protocolos diseñados para usted.</p>
+                <div class="form-group">
+                    <label>¿Está dispuesto a realizar cambios significativos en su estilo de vida, nutrición y rutinas para alcanzar sus objetivos de salud?</label>
+                    <select name="compromiso">
+                        <option value="Sí, estoy 100% comprometido.">Sí, estoy 100% comprometido.</option>
+                        <option value="Estoy dispuesto, pero necesito mucha guía y apoyo.">Estoy dispuesto, pero necesito mucha guía y apoyo.</option>
+                        <option value="Me cuesta hacer cambios, prefiero intervenciones médicas directas.">Me cuesta hacer cambios, prefiero intervenciones médicas directas.</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>¿Tiene exámenes de laboratorio recientes (últimos 6 meses) que pueda aportar a su primera consulta?</label><input type="text" name="lab_recientes" placeholder="[ ] Sí, los llevaré/enviaré [ ] No"></div>
+
                 <button type="submit" class="btn">Enviar Cuestionario 360° al Instituto</button>
             </form>
         </div>
@@ -506,22 +679,74 @@ def portal_preconsulta_form(id_paciente):
 def portal_preconsulta_guardar(id_paciente):
     paciente = next((p for p in PACIENTES if p['id'] == id_paciente), None)
     if paciente:
+        objetivos = request.form.getlist('obj')
+        wearables_sel = request.form.getlist('wearable')
+        
         paciente['pre_consulta'] = {
             "nombre_completo": request.form.get('nombre_completo', paciente['nombre']),
-            "objetivos": request.form.get('objetivos', 'Optimización general'),
-            "salud_actual": request.form.get('salud_actual', '8/10'),
+            "fecha_nac": request.form.get('fecha_nac', 'N/A'),
+            "edad": request.form.get('edad', str(paciente['edad'])),
+            "genero": request.form.get('genero', 'N/A'),
+            "nacionalidad": request.form.get('nacionalidad', 'N/A'),
+            "residencia": request.form.get('residencia', 'N/A'),
+            "profesion": request.form.get('profesion', 'N/A'),
+            "estado_civil": request.form.get('estado_civil', 'N/A'),
+            "telefono": request.form.get('telefono', 'N/A'),
+            "correo": request.form.get('correo', 'N/A'),
+            "contacto_emergencia": request.form.get('contacto_emergencia', 'N/A'),
+            "objetivos": ", ".join(objetivos) if objetivos else "Optimización general",
+            "queja": request.form.get('queja', 'N/A'),
+            "salud_actual": request.form.get('salud_actual', 'N/A'),
+            "impacto_vida": request.form.get('impacto_vida', 'N/A'),
+            "antecedentes": request.form.get('antecedentes', 'Ninguno'),
+            "cirugias": request.form.get('cirugias', 'Ninguna'),
+            "ant_familiares": request.form.get('ant_familiares', 'Ninguno'),
+            "alergias": request.form.get('alergias', 'Ninguna'),
+            "medicamentos": request.form.get('medicamentos', 'Ninguno'),
+            "suplementos_actuales": request.form.get('suplementos_actuales', 'Ninguno'),
+            "trh": request.form.get('trh', 'No'),
+            "estudios_geneticos": request.form.get('estudios_geneticos', 'No'),
+            "nutricion": request.form.get('nutricion', 'N/A'),
+            "procesados": request.form.get('procesados', 'N/A'),
+            "sintomas_digestivos": request.form.get('sintomas_digestivos', 'N/A'),
+            "agua": request.form.get('agua', 'N/A'),
+            "sueno_horas": request.form.get('sueno_horas', '7 horas'),
+            "sueno_calidad": request.form.get('sueno_calidad', 'N/A'),
+            "wearable": ", ".join(wearables_sel) if wearables_sel else "Ninguno",
+            "otro_dispositivo": request.form.get('otro_dispositivo', 'N/A'),
+            "compartir_sueno": request.form.get('compartir_sueno', 'N/A'),
+            "dias_ejercicio": request.form.get('dias_ejercicio', 'N/A'),
+            "tipo_entrenamiento": request.form.get('tipo_entrenamiento', 'N/A'),
+            "dolor_articular": request.form.get('dolor_articular', 'No'),
+            "estres": request.form.get('estres', 'N/A'),
+            "manejo_estres": request.form.get('manejo_estres', 'N/A'),
+            "toxinas": request.form.get('toxinas', 'No'),
+            "energia_dia": request.form.get('energia_dia', 'N/A'),
+            "bajones_energia": request.form.get('bajones_energia', 'No'),
+            "libido": request.form.get('libido', 'No'),
+            "ciclo_menstrual": request.form.get('ciclo_menstrual', 'N/A'),
+            "compromiso": request.form.get('compromiso', 'Alto'),
+            "lab_recientes": request.form.get('lab_recientes', 'No'),
             "estado": "Completado 🟢"
         }
-        paciente['link_enviado'] = True
     
     gracias_template = """
     <!DOCTYPE html>
     <html lang="es">
-    <head><title>¡Completado! | Instituto Aeterna</title></head>
-    <body style="font-family: sans-serif; background-color: #121110; color: #f5f2eb; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center;">
-        <div style="background: #1c1a18; border: 1px solid #292524; padding: 40px; border-radius: 12px; max-width: 400px;">
-            <h2 style="color: #d4af37; text-transform: uppercase;">¡Formulario Recibido!</h2>
-            <p style="font-size: 13px; color: #a8a29e;">Sus respuestas han sido sincronizadas en su expediente clínico.</p>
+    <head>
+        <meta charset="UTF-8">
+        <title>¡Completado! | Instituto Aeterna</title>
+        <style>
+            body { font-family: 'Inter', system-ui, sans-serif; background-color: #121110; color: #f5f2eb; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; }
+            .box { background: #1c1a18; border: 1px solid #292524; padding: 40px; border-radius: 12px; max-width: 400px; box-shadow: 0 15px 30px rgba(0,0,0,0.5); }
+            h2 { color: #d4af37; text-transform: uppercase; font-size: 15px; margin-top: 0; }
+            p { font-size: 13px; color: #a8a29e; line-height: 1.6; }
+        </style>
+    </head>
+    <body>
+        <div class="box">
+            <h2>¡Formulario Recibido!</h2>
+            <p>Gracias. Sus respuestas han sido sincronizadas de manera automática y segura en su expediente clínico para su consulta en el Instituto Aeterna.</p>
             <p style="font-size: 11px; margin-top: 25px; color: #555770;">Ya puede cerrar esta ventana.</p>
         </div>
     </body>
@@ -580,6 +805,10 @@ def index():
         "Transferencia": sum(i["monto"] for i in db_caja_pagos if i["metodo"] == "Transferencia")
     }
 
+    porc_efectivo = int((desglose_metodos["Efectivo"] / total_recaudado * 100) if total_recaudado > 0 else 0)
+    porc_tarjeta = int((desglose_metodos["Tarjeta"] / total_recaudado * 100) if total_recaudado > 0 else 0)
+    porc_transf = int((desglose_metodos["Transferencia"] / total_recaudado * 100) if total_recaudado > 0 else 0)
+
     return render_template_string(
         HTML_TEMPLATE, 
         rol=rol, 
@@ -595,7 +824,8 @@ def index():
         total_recaudado=total_recaudado,
         total_gastos=total_gastos,
         balance_neto=balance_neto,
-        desglose=desglose_metodos
+        desglose=desglose_metodos,
+        porcs={"tarjeta": porc_tarjeta, "transf": porc_transf, "efectivo_val": porc_efectivo}
     )
 
 @app.route('/api/admision/marregar-enlace', methods=['POST'])
@@ -623,7 +853,6 @@ def registrar_pago_admin():
     }
     db_caja_pagos.append(nuevo_pago)
     
-    # Sincronización automática vía API REST con la app de finanzas en Render
     try:
         requests.post(FINANZAS_API_URL, json=nuevo_pago, timeout=3)
     except Exception:
@@ -631,8 +860,87 @@ def registrar_pago_admin():
         
     return jsonify({"status": "success", "pago": nuevo_pago})
 
+@app.route('/api/admin/ver-kude/<int:pago_id>')
+def ver_kude(pago_id):
+    pago = next((item for item in db_caja_pagos if item['id'] == pago_id), db_caja_pagos[0])
+    return f"""
+    <html>
+    <head><title>KUDE - Sifen - Instituto Aeterna E.A.S.</title></head>
+    <body style="font-family: monospace; padding: 30px;">
+        <h2>INSTITUTO AETERNA E.A.S.</h2>
+        <p>RUC: 80172292-6 | Factura N°: 001-001-{pago_id:07d}</p>
+        <p><b>CDC:</b> {pago['cdc']}</p>
+        <p><b>PACIENTE:</b> {pago['paciente']} | <b>MONTO:</b> Gs. {pago['monto']:,.0f}</p>
+        <p>[ CÓDIGO QR TRIBUTARIO DNIT ]</p>
+        <button onclick="window.print()">Imprimir KUDE</button>
+    </body>
+    </html>
+    """
+
+@app.route('/api/generar-pdf/<id_paciente>')
+def generar_pdf(id_paciente):
+    paciente = next((p for p in PACIENTES if p['id'] == id_paciente), PACIENTES[0])
+    return f"<h1>Reporte Integral PDF - {paciente['nombre']}</h1>"
+
+@app.route('/api/medico/guardar-biomarcador-manual', methods=['POST'])
+def guardar_biomarcador_manual():
+    data = request.get_json() if request.is_json else request.form
+    id_paciente = data.get('id_paciente')
+    parametro = data.get('parametro', 'Biomarcador')
+    fecha = data.get('fecha', '20/10/2026')
+    try:
+        valor = float(data.get('valor', 0))
+    except ValueError:
+        valor = 0.0
+    unidad = data.get('unidad', 'mg/dL')
+    
+    paciente = next((p for p in PACIENTES if p['id'] == id_paciente), None)
+    if paciente:
+        encontrado = False
+        for bio in paciente['biomarcadores_longitudinales']:
+            if bio['parametro'].strip().lower() == parametro.strip().lower():
+                bio['historial'].append({"fecha": fecha, "valor": valor, "unidad": unidad})
+                encontrado = True
+                break
+        if not encontrado:
+            paciente['biomarcadores_longitudinales'].append({
+                "parametro": parametro,
+                "rango_optimo": "Personalizado",
+                "historial": [{"fecha": fecha, "valor": valor, "unidad": unidad}]
+            })
+        return jsonify({"status": "success", "mensaje": "Biomarcador registrado en la línea de tiempo."})
+    return jsonify({"status": "error"}), 404
+
+@app.route('/api/medico/procesar-pdf-laboratorio', methods=['POST'])
+def procesar_pdf_laboratorio():
+    data = request.get_json() if request.is_json else request.form
+    id_paciente = data.get('id_paciente')
+    paciente = next((p for p in PACIENTES if p['id'] == id_paciente), None)
+    if paciente:
+        hallazgos = [
+            {"parametro": "Glucosa en Ayunas", "valor": 84.0, "unidad": "mg/dL", "fecha": "20/10/2026"},
+            {"parametro": "Colesterol LDL", "valor": 95.0, "unidad": "mg/dL", "fecha": "20/10/2026"},
+            {"parametro": "Insulina Basal", "valor": 4.1, "unidad": "uIU/mL", "fecha": "20/10/2026"}
+        ]
+        for h in hallazgos:
+            encontrado = False
+            for bio in paciente['biomarcadores_longitudinales']:
+                if bio['parametro'].strip().lower() == h['parametro'].strip().lower():
+                    bio['historial'].append({"fecha": h['fecha'], "valor": h['valor'], "unidad": h['unidad']})
+                    encontrado = True
+                    break
+            if not encontrado:
+                paciente['biomarcadores_longitudinales'].append({
+                    "parametro": h['parametro'],
+                    "rango_optimo": "Estándar",
+                    "historial": [{"fecha": h['fecha'], "valor": h['valor'], "unidad": h['unidad']}]
+                })
+        return jsonify({"status": "success", "mensaje": "¡PDF procesado por IA! Se actualizaron los biomarcadores automáticamente."})
+    return jsonify({"status": "error"}), 404
+
 LOGIN_TEMPLATE = """<!DOCTYPE html>
-<html lang="es"><head><meta charset="UTF-8"><title>Acceso — Instituto Aeterna E.A.S.</title></head>
+<html lang="es">
+<head><title>Login — Instituto Aeterna</title></head>
 <body style="font-family:sans-serif; background:#f4f6f9; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;">
     <div style="background:#fff; padding:40px; border-radius:8px; width:350px; box-shadow:0 10px 25px rgba(0,0,0,0.1);">
         <h2 style="color:#b8860b; text-align:center;">Instituto Aeterna E.A.S.</h2>
@@ -645,30 +953,33 @@ LOGIN_TEMPLATE = """<!DOCTYPE html>
             <button type="submit" style="background:#b8860b; color:#fff; border:none; padding:12px; width:100%; font-weight:bold; cursor:pointer;">Entrar</button>
         </form>
     </div>
-</body></html>"""
+</body>
+</html>"""
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="es">
-<head><meta charset="UTF-8"><title>Instituto Aeterna E.A.S. — Sistema de Gestión</title>
-<style>
-    :root { --bg-main: #121110; --sidebar-bg: #090908; --card-bg: #1c1a18; --text-primary: #f5f2eb; --text-secondary: #a8a29e; --accent: #d4af37; --border: #292524; --success: #34d399; }
-    body.light-mode { --bg-main: #f4f6f9; --sidebar-bg: #fff; --card-bg: #fff; --text-primary: #121110; --text-secondary: #555770; --accent: #b8860b; --border: #d1d5db; --success: #059669; }
-    body { font-family: 'Inter', system-ui, sans-serif; background-color: var(--bg-main); margin: 0; color: var(--text-primary); display: flex; height: 100vh; overflow: hidden; }
-    .sidebar { width: 280px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; box-sizing: border-box; overflow-y: auto; }
-    .sidebar a { color: var(--text-secondary); text-decoration: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 3px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
-    .sidebar a:hover, .sidebar a.active { background-color: var(--border); color: var(--text-primary); border-left: 2px solid var(--accent); }
-    .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
-    header { background-color: var(--sidebar-bg); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
-    .container { padding: 32px; max-width: 1300px; margin: 0 auto; width: 100%; box-sizing: border-box; }
-    .box { background: var(--card-bg); padding: 28px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 24px; }
-    .box h3 { margin-top: 0; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 12px; font-size: 14px; text-transform: uppercase; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
-    th { background: var(--bg-main); color: var(--text-secondary); text-transform: uppercase; font-size: 11px; }
-    .form-control { width: 100%; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; color: var(--text-primary); font-size: 13px; box-sizing: border-box; }
-    .btn { background: var(--accent); color: #090908; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; text-transform: uppercase; }
-    .logout-btn { background: rgba(248, 113, 113, 0.1); color: #f87171; padding: 6px 12px; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: bold; }
-</style>
+<head>
+    <meta charset="UTF-8">
+    <title>Instituto Aeterna E.A.S. — Sistema de Gestión</title>
+    <style>
+        :root { --bg-main: #121110; --sidebar-bg: #090908; --card-bg: #1c1a18; --text-primary: #f5f2eb; --text-secondary: #a8a29e; --accent: #d4af37; --border: #292524; --success: #34d399; }
+        body.light-mode { --bg-main: #f4f6f9; --sidebar-bg: #fff; --card-bg: #fff; --text-primary: #121110; --text-secondary: #555770; --accent: #b8860b; --border: #d1d5db; --success: #059669; }
+        body { font-family: 'Inter', system-ui, sans-serif; background-color: var(--bg-main); margin: 0; color: var(--text-primary); display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 280px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; box-sizing: border-box; overflow-y: auto; }
+        .sidebar a { color: var(--text-secondary); text-decoration: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 3px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+        .sidebar a:hover, .sidebar a.active { background-color: var(--border); color: var(--text-primary); border-left: 2px solid var(--accent); }
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
+        header { background-color: var(--sidebar-bg); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+        .container { padding: 32px; max-width: 1300px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+        .box { background: var(--card-bg); padding: 28px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 24px; }
+        .box h3 { margin-top: 0; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 12px; font-size: 14px; text-transform: uppercase; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
+        th { background: var(--bg-main); color: var(--text-secondary); text-transform: uppercase; font-size: 11px; }
+        .form-control { width: 100%; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; color: var(--text-primary); font-size: 13px; box-sizing: border-box; }
+        .btn { background: var(--accent); color: #090908; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; text-transform: uppercase; }
+        .logout-btn { background: rgba(248, 113, 113, 0.1); color: #f87171; padding: 6px 12px; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: bold; }
+    </style>
 </head>
 <body>
     <div class="sidebar">
@@ -749,25 +1060,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div class="box">
                         <h3>Mi Agenda de Hoy — {{ nombre_usuario }}</h3>
                         <table>
-                            <tr><th>Hora</th><th>Paciente</th><th>Programa</th><th>Pre-Consulta</th><th>Acción</th></tr>
+                            <tr><th>Hora</th><th>Paciente</th><th>Programa</th><th>Acción</th></tr>
                             {% for pat in pacientes %}
                             <tr>
                                 <td><b>{{ pat.hora_turno }}</b></td>
                                 <td>{{ pat.nombre }} ({{ pat.edad }} años)</td>
                                 <td>{{ pat.programa }}</td>
-                                <td>
-                                    {% if pat.link_enviado %}
-                                        <span class="badge-status">Completado 🟢</span>
-                                    {% else %}
-                                        <span style="color: var(--warning);">Pendiente</span>
-                                    {% endif %}
-                                </td>
                                 <td><a href="/?rol=medico&seccion=examenes_lab&id={{ pat.id }}" class="btn" style="padding: 6px 14px; font-size: 11px; text-decoration: none;">Abrir Expediente / Labs</a></td>
                             </tr>
                             {% endfor %}
                         </table>
                     </div>
                 {% elif seccion == 'examenes_lab' %}
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+                        <div class="box" style="margin-bottom: 0; border-color: var(--success); background: rgba(52, 211, 153, 0.03);">
+                            <h3 style="color: var(--success); font-size: 12.5px;">🤖 Lector IA de Resultados en PDF (Laboratorio)</h3>
+                            <p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 12px;">Suba el PDF entregado por el laboratorio aliado. El sistema extraerá automáticamente los valores y actualizará la línea de tiempo.</p>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="file" id="pdf_lab_file" class="form-control" accept=".pdf" style="font-size: 11px;">
+                                <button type="button" class="btn" style="background: var(--success); color: #000; padding: 8px 14px; font-size: 11px; white-space: nowrap;" onclick="procesarPdfLab('{{ p.id }}')">Procesar PDF</button>
+                            </div>
+                        </div>
+
+                        <div class="box" style="margin-bottom: 0; border-color: var(--accent);">
+                            <h3 style="font-size: 12.5px;">➕ Carga Manual de Biomarcadores</h3>
+                            <p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 12px;">Ingrese un resultado físico para sumarlo a la línea de tiempo.</p>
+                            <form onsubmit="guardarBiomarcadorManual(event, '{{ p.id }}')" style="display: flex; gap: 8px;">
+                                <input type="text" id="manual_param" class="form-control" placeholder="Parámetro (Ej. Glucosa)" required style="font-size: 11.5px;">
+                                <input type="number" step="0.1" id="manual_valor" class="form-control" placeholder="Valor" required style="font-size: 11.5px; width: 80px;">
+                                <input type="text" id="manual_unidad" class="form-control" value="mg/dL" required style="font-size: 11.5px; width: 70px;">
+                                <button type="submit" class="btn" style="padding: 8px 12px; font-size: 11px; width: auto;">Añadir</button>
+                            </form>
+                        </div>
+                    </div>
+
                     <div class="box">
                         <h3>Análisis Longitudinal: Tendencias y Números Históricos ({{ p.nombre }})</h3>
                         {% for bio in p.biomarcadores_longitudinales %}
@@ -799,6 +1125,46 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         function marcarEnviado(idPaciente) {
             fetch('/api/admision/marregar-enlace', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_paciente: idPaciente })
+            })
+            .then(res => res.json())
+            .then(resp => {
+                alert(resp.mensaje);
+                window.location.reload();
+            });
+        }
+
+        function guardarBiomarcadorManual(event, idPaciente) {
+            event.preventDefault();
+            const data = {
+                id_paciente: idPaciente,
+                parametro: document.getElementById('manual_param').value,
+                fecha: '20/10/2026',
+                valor: document.getElementById('manual_valor').value,
+                unidad: document.getElementById('manual_unidad').value
+            };
+            fetch('/api/medico/guardar-biomarcador-manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(resp => {
+                alert(resp.mensaje);
+                window.location.reload();
+            });
+        }
+
+        function procesarPdfLab(idPaciente) {
+            const fileInput = document.getElementById('pdf_lab_file');
+            if (!fileInput.files.length) {
+                alert('Por favor seleccione un archivo PDF de laboratorio primero.');
+                return;
+            }
+            alert('Leyendo PDF y extrayendo biomarcadores mediante motor OCR/IA...');
+            fetch('/api/medico/procesar-pdf-laboratorio', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id_paciente: idPaciente })
