@@ -1,9 +1,9 @@
 Flask==3.0.2
 Flask-SQLAlchemy==3.1.1
-SQLAlchemy==2.0.25
+SQLAlchemy==2.0.19
 requests==2.31.0
 gunicorn==21.2.0
 qrcode==7.4.2
 Pillow
 python-dotenv==1.0.1
-anthropic==0.18.1
+anthropic==0.7.7
