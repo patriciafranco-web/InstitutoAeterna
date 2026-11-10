@@ -1,0 +1,59 @@
+<!-- Selector de Género -->
+<div class="form-group">
+    <label>Género:</label>
+    <select name="genero" id="select-genero" class="form-control" onchange="verificarGenero()">
+        <option value="">Seleccione...</option>
+        <option value="Femenino">Femenino</option>
+        <option value="Masculino">Masculino</option>
+        <option value="Otro">Otro</option>
+    </select>
+</div>
+
+<!-- BLOQUE EXCLUSIVO PARA MUJERES (Oculto por defecto) -->
+<div id="bloque-mujer" style="display: none; border-left: 3px solid var(--accent); padding-left: 15px; margin: 20px 0;">
+    <h4 style="color: var(--accent); font-size: 13px; text-transform: uppercase;">Salud Hormonal y Ciclo (Femenino)</h4>
+    
+    <div class="form-group">
+        <label>¿Tus ciclos menstruales son regulares?</label>
+        <select name="ciclo_menstrual" class="form-control">
+            <option value="">Seleccione...</option>
+            <option value="Sí">Sí</option>
+            <option value="No">No</option>
+            <option value="Prefiero hablarlo en consulta">Prefiero hablarlo en consulta</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>¿Utilizás anticonceptivos (ACO) o tratamiento hormonal?</label>
+        <input type="text" name="anticonceptivos_hormonas" class="form-control" placeholder="Especifique si usa pastillas, DIU, etc...">
+    </div>
+
+    <div class="form-group">
+        <label>¿Estás embarazada, amamantando o buscando embarazo?</label>
+        <select name="estado_gestacional" class="form-control">
+            <option value="">Seleccione...</option>
+            <option value="Embarazada">Embarazada</option>
+            <option value="Amamantando">Amamantando</option>
+            <option value="Buscando embarazo">Buscando embarazo</option>
+            <option value="Ninguna de las anteriores">Ninguna de las anteriores</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>¿Tenés diagnóstico de SOP, endometriosis, miomas u otra condición ginecológica?</label>
+        <input type="text" name="condicion_ginecologica" class="form-control" placeholder="Especifique si corresponde...">
+    </div>
+</div>
+
+<script>
+    function verificarGenero() {
+        const generoSelect = document.getElementById('select-genero');
+        const bloqueMujer = document.getElementById('bloque-mujer');
+        
+        if (generoSelect.value === 'Femenino') {
+            bloqueMujer.style.display = 'block';
+        } else {
+            bloqueMujer.style.display = 'none';
+        }
+    }
+</script>

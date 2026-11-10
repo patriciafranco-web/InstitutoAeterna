@@ -1,0 +1,91 @@
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); width: auto; text-decoration: none; font-size: 11.5px;">← VOLVER A MI AGENDA</a>
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <button class="btn" style="background: var(--success); color: #fff; padding: 8px 16px; font-size: 11.5px; width: auto;" onclick="enviarLinkWhatsApp('{{ p.nombre }}', '{{ p.id }}')">ENVIAR WHATSAPP AL PACIENTE</button>
+        <span style="font-size: 13px; font-weight: 600; color: var(--accent);">Paciente en Atención: <b>{{ p.nombre }} ({{ p.edad }} años)</b></span>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+    <div class="box" style="margin-bottom: 0;">
+        <h3 style="color: var(--accent); font-size: 13px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">Editor Libre de Receta Médica</h3>
+        <p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 15px;">Escriba o pegue libremente las prescripciones, dosis e indicaciones.</p>
+        
+        <form action="/api/medico/guardar-receta-texto?token={{ token }}" method="POST">
+            <input type="hidden" name="id_paciente" value="{{ p.id }}">
+            <div class="form-group">
+                <label style="font-size: 11.5px; font-weight: bold; color: var(--text-secondary); margin-bottom: 6px; display: block;">Contenido de la Prescripción:</label>
+                <textarea name="receta_texto" id="inputRecetaTexto" class="form-control" rows="12" style="font-size: 13px; line-height: 1.6; resize: vertical;" oninput="actualizarPrevisualizacion(this.value)">{{ p.receta_texto }}</textarea>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button type="submit" class="btn" style="flex: 1; background: var(--accent);">Guardar y Actualizar Receta</button>
+                <a href="/medico/imprimir-receta/{{ p.id }}?token={{ token }}" target="_blank" class="btn" style="background: var(--success); color: white; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">🖨️ Imprimir Hoja A5</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="box" style="margin-bottom: 0; background: #f7f6f2; color: #121110; border: 1px solid var(--border); padding: 25px; position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #800020; padding-bottom: 8px; margin-bottom: 15px;">
+            <span style="font-size: 12px; font-weight: bold; color: #800020; text-transform: uppercase;">Instituto Aeterna — Sanatorio Le Blanc</span>
+            <span style="font-size: 10px; background: #e5e7eb; padding: 3px 6px; border-radius: 4px; color: #333;">Vista Previa A5</span>
+        </div>
+
+        <div style="font-size: 11px; margin-bottom: 12px; line-height: 1.4; background: white; padding: 10px; border-radius: 6px; border: 1px solid #dcd7cc;">
+            <p style="margin: 3px 0;"><b>Paciente:</b> {{ p.nombre }} ({{ p.edad }} años)</p>
+            <p style="margin: 3px 0;"><b>Programa:</b> {{ p.programa }}</p>
+            <p style="margin: 3px 0;"><b>Médico:</b> {{ nombre_usuario }} | <b>Fecha:</b> <span id="fecha-preview"></span></p>
+        </div>
+
+        <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #dcd7cc; min-height: 160px; font-size: 12px; line-height: 1.6;">
+            <b style="color: #800020; font-size: 11px; text-transform: uppercase; display: block; margin-bottom: 8px;">Prescripciones Médicas:</b>
+            <div id="previewTextoReceta" style="white-space: pre-wrap; font-family: 'Inter', Arial, sans-serif; color: #333;">{{ p.receta_texto }}</div>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 10px; color: #666; border-top: 1px solid #dcd7cc; padding-top: 10px;">
+            <div>Sanatorio Le Blanc (CDE)<br><strong>Escanee el QR</strong> para validación oficial.</div>
+            <div style="text-align: center; border-top: 1px solid #333; width: 110px; padding-top: 3px; font-size: 10px; font-weight: bold; color: #333;">
+                {{ nombre_usuario }}<br><span style="font-size: 9px; font-weight: normal; color: #555;">Reg. Prof. MSPBS</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="box" style="margin-top: 25px;">
+    <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 12px;">Historial de Recetas Emitidas para este Paciente</h4>
+    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+        <thead>
+            <tr style="border-bottom: 1px solid var(--border); color: var(--text-secondary);">
+                <th style="padding: 8px; width: 15%;">Fecha</th>
+                <th style="padding: 8px; width: 25%;">Médico Emisor</th>
+                <th style="padding: 8px; width: 45%;">Contenido / Estado</th>
+                <th style="padding: 8px; width: 15%; text-align: center;">Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if recetas_paciente_actual %}
+                {% for r in recetas_paciente_actual %}
+                <tr style="border-bottom: 1px solid var(--border);">
+                    <td style="padding: 8px;"><b>{{ r.fecha }}</b></td>
+                    <td style="padding: 8px;">{{ r.nombre_medico }}</td>
+                    <td style="padding: 8px; color: var(--text-secondary);">
+                        <span style="color: var(--text-primary);">Receta Electrónica (UUID: {{ r.id_receta[:8] }}...)</span><br>
+                        Estado: {% if r.estado == 'Emitida' %}<span style="color: var(--success); font-weight: bold;">Activa</span>{% else %}<span style="color: var(--warning); font-weight: bold;">Dispensada</span>{% endif %}
+                    </td>
+                    <td style="padding: 8px; text-align: center;">
+                        <a href="/validar/{{ r.id_receta }}" target="_blank" class="badge-bordo" style="padding: 4px 8px; font-size: 10.5px;">Ver QR ↗</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+            <tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 15px;">No hay recetas anteriores registradas.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    document.getElementById('fecha-preview').innerText = new Date().toLocaleDateString('es-PY');
+    function actualizarPrevisualizacion(texto) {
+        document.getElementById('previewTextoReceta').innerText = texto;
+    }
+</script>

@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medysis Integra — Aeterna Instituto de Optimización Humana</title>
+    <style>
+        :root {
+            --bg-main: #121110; --sidebar-bg: #090908; --card-bg: #1c1a18;
+            --text-primary: #f5f2eb; --text-secondary: #a8a29e; --accent: #d4af37;
+            --accent-hover: #e5c158; --border: #292524; --success: #34d399; --warning: #f59e0b;
+        }
+        body.light-mode {
+            --bg-main: #f4f6f9; --sidebar-bg: #ffffff; --card-bg: #ffffff;
+            --text-primary: #121110; --text-secondary: #555770; --accent: #b8860b;
+            --accent-hover: #996f05; --border: #d1d5db; --success: #059669; --warning: #d97706;
+        }
+        body { font-family: 'Inter', system-ui, sans-serif; background-color: var(--bg-main); margin: 0; color: var(--text-primary); display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 280px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; box-sizing: border-box; flex-shrink: 0; overflow-y: auto; }
+        .sidebar h2 { font-size: 14px; letter-spacing: 2px; color: var(--accent); margin-top: 0; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px; font-weight: 700; text-transform: uppercase; }
+        .menu-section-title { font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 1.5px; margin: 18px 0 6px 10px; font-weight: bold; }
+        .sidebar a { color: var(--text-secondary); text-decoration: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 3px; font-size: 13px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; }
+        .sidebar a:hover, .sidebar a.active { background-color: var(--border); color: var(--text-primary); border-left: 2px solid var(--accent); }
+        .addon-badge { font-size: 9px; background: rgba(212, 175, 55, 0.15); color: var(--accent); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(212, 175, 55, 0.3); font-weight: bold; text-transform: uppercase; }
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: radial-gradient(circle at top right, #1a1715 0%, #121110 60%); }
+        body.light-mode .main-content { background: radial-gradient(circle at top right, #ffffff 0%, #f4f6f9 60%); }
+        header { background-color: rgba(9, 9, 8, 0.85); backdrop-filter: blur(10px); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+        body.light-mode header { background-color: rgba(255, 255, 255, 0.85); }
+        .container { padding: 32px; max-width: 1300px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+        .role-selector-bar { display: flex; align-items: center; gap: 12px; }
+        .role-btn { background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border); padding: 6px 14px; border-radius: 4px; font-size: 11.5px; font-weight: 600; cursor: pointer; text-decoration: none; }
+        .role-btn.active { background: var(--accent); color: #090908; border-color: var(--accent); font-weight: 700; }
+        .patient-selector { background: var(--card-bg); padding: 16px 24px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 24px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .patient-selector span { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
+        .patient-selector a { padding: 6px 14px; border-radius: 4px; text-decoration: none; font-size: 12.5px; border: 1px solid var(--border); color: var(--text-secondary); background: var(--bg-main); }
+        .patient-selector a.active { background: var(--accent); color: #090908; border-color: var(--accent); font-weight: 600; }
+        .patient-card { background: var(--card-bg); padding: 24px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 28px; display: flex; justify-content: space-between; align-items: center; }
+        .grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 24px; }
+        .box { background: var(--card-bg); padding: 28px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 24px; }
+        .box h3 { margin-top: 0; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 12px; font-size: 14px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+        .badge-pill { background: rgba(212, 175, 55, 0.1); color: var(--accent); padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid rgba(212, 175, 55, 0.2); display: inline-block; }
+        .badge-status { background: rgba(52, 211, 153, 0.1); color: var(--success); padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid rgba(52, 211, 153, 0.2); display: inline-block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+        th { background: var(--bg-main); color: var(--text-secondary); font-weight: 600; font-size: 11.5px; text-transform: uppercase; }
+        td { color: var(--text-primary); }
+        p { line-height: 1.6; color: var(--text-secondary); font-size: 13.5px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; }
+        .form-control { width: 100%; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; color: var(--text-primary); font-size: 13px; box-sizing: border-box; outline: none; }
+        .form-control:focus { border-color: var(--accent); }
+        .btn { background: var(--accent); color: #090908; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-transform: uppercase; transition: 0.2s; width: 100%; }
+        .btn:hover { background: var(--accent-hover); }
+        .chat-widget-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000; }
+        .chat-bubble-btn { background: var(--accent); color: #090908; border: none; width: 52px; height: 52px; border-radius: 50%; box-shadow: 0 4px 20px rgba(212, 175, 55, 0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 700; transition: transform 0.2s; }
+        .chat-bubble-btn:hover { transform: scale(1.05); }
+        .chat-window { display: none; position: absolute; bottom: 64px; right: 0; width: 380px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); overflow: hidden; flex-direction: column; }
+        .chat-header { background: var(--sidebar-bg); padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .chat-header span { font-weight: 600; font-size: 12.5px; color: var(--accent); text-transform: uppercase; }
+        .chat-close-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; }
+        .chat-history { background: var(--bg-main); padding: 16px; height: 280px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 12px; }
+        .chat-msg { padding: 10px 14px; border-radius: 6px; max-width: 85%; line-height: 1.5; }
+        .chat-msg.user { background: var(--border); align-self: flex-end; color: var(--text-primary); }
+        .chat-msg.ai { background: rgba(212, 175, 55, 0.1); align-self: flex-start; color: var(--accent); border: 1px solid rgba(212, 175, 55, 0.2); }
+        .chat-input-area { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); background: var(--sidebar-bg); }
+        .chat-input { flex: 1; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; color: var(--text-primary); font-size: 13px; outline: none; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Medysis Integra</h2>
+        {% if rol == 'secretaria' %}
+            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 10px; border-radius: 6px; margin-bottom: 20px; font-size: 11.5px; color: #f59e0b;">
+                <b>Modo Administrativo:</b> Control Financiero & Sifen.
+            </div>
+            <a href="/?rol=secretaria&seccion=caja" class="{% if seccion != 'agenda' %}active{% endif %}">💰 Flujo de Caja & Sifen</a>
+            <a href="/?rol=secretaria&seccion=agenda" class="{% if seccion == 'agenda' %}active{% endif %}">📅 Agenda & Recepción</a>
+        {% else %}
+            <div style="background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.3); padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 11.5px; color: #34d399;">
+                <b>Modo Clínico:</b> Acceso total.
+            </div>
+            <div class="menu-section-title">Área Clínica (Core)</div>
+            <a href="/?rol=medico&seccion=paciente&id={{ p.id }}" class="{% if seccion == 'paciente' %}active{% endif %}">Ficha Médica Integral</a>
+            <a href="/?rol=medico&seccion=biomarcadores&id={{ p.id }}" class="{% if seccion == 'biomarcadores' %}active{% endif %}">Biomarcadores & Lab</a>
+            <a href="/?rol=medico&seccion=recetas&id={{ p.id }}" class="{% if seccion == 'recetas' %}active{% endif %}">Recetas & Fórmulas</a>
+            <a href="/?rol=medico&seccion=regenerativa&id={{ p.id }}" class="{% if seccion == 'regenerativa' %}active{% endif %}">Med. Regenerativa & IV</a>
+            <a href="/?rol=medico&seccion=wearables&id={{ p.id }}" class="{% if seccion == 'wearables' %}active{% endif %}">Wearables & Calorimetría</a>
+            <a href="/?rol=medico&seccion=ia&id={{ p.id }}" class="{% if seccion == 'ia' %}active{% endif %}">Transcripción & SOAP</a>
+
+            <div class="menu-section-title" style="color: var(--accent);">Módulos Extra (Add-ons)</div>
+            <a href="/?rol=medico&seccion=reporte_longevidad&id={{ p.id }}" class="{% if seccion == 'reporte_longevidad' %}active{% endif %}">Reporte PDF <span class="addon-badge">Extra</span></a>
+            <a href="/?rol=medico&seccion=consentimientos&id={{ p.id }}" class="{% if seccion == 'consentimientos' %}active{% endif %}">Consent. Digitales <span class="addon-badge">Extra</span></a>
+            <a href="/?rol=medico&seccion=alertas_predictivas&id={{ p.id }}" class="{% if seccion == 'alertas_predictivas' %}active{% endif %}">Alertas IA <span class="addon-badge">Extra</span></a>
+
+            <div class="menu-section-title">Gestión & Operativa</div>
+            <a href="/?rol=medico&seccion=agenda&id={{ p.id }}" class="{% if seccion == 'agenda' %}active{% endif %}">Agenda & Equipos</a>
+
+            <div class="menu-section-title">Paciente & Conectividad</div>
+            <a href="/?rol=medico&seccion=portal_paciente&id={{ p.id }}" class="{% if seccion == 'portal_paciente' %}active{% endif %}">Portal del Paciente</a>
+        {% endif %}
+    </div>
+
+    <div class="main-content">
+        <header>
+            <h3 style="margin: 0; color: var(--text-primary); font-size: 14px; font-weight: 600;">Aeterna - Instituto de Optimización Humana</h3>
+            <div class="role-selector-bar">
+                <button class="role-btn" onclick="toggleTheme()" id="themeBtn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent);">Tema: Oscuro</button>
+                <span style="font-size: 11.5px; color: var(--text-secondary); text-transform: uppercase;">Simular Perfil:</span>
+                <a href="/?rol=medico&seccion=paciente&id={{ p.id }}" class="role-btn {% if rol == 'medico' %}active{% endif %}">Médico</a>
+                <a href="/?rol=secretaria&seccion=caja" class="role-btn {% if rol == 'secretaria' %}active{% endif %}">Secretaría / Contabilidad</a>
+            </div>
+        </header>
+
+        <div class="container">
+            {% if rol == 'secretaria' %}
+                {% if seccion == 'agenda' %}
+                    <div class="box">
+                        <h3>Panel Administrativo — Agenda & Recepción</h3>
+                        <p>Control de turnos y disponibilidad de recursos clínicos de Aeterna.</p>
+                        <table>
+                            <tr><th>Hora</th><th>Paciente</th><th>Especialidad / Sala</th><th>Estado</th></tr>
+                            <tr><td>09:00 hs</td><td>Carlos Benítez</td><td>Medicina Metabólica</td><td><span style="color: var(--success); font-weight: bold;">Atendido</span></td></tr>
+                            <tr><td>10:30 hs</td><td>María Giménez</td><td>Sueroterapia (NAD+)</td><td><span style="color: var(--accent); font-weight: bold;">En Consulta</span></td></tr>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="box">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 20px;">
+                            <h3 style="margin: 0; border: none;">💰 Control de Flujo de Caja, Conciliación & Facturación Sifen (DNIT)</h3>
+                            <a href="/api/admin/exportar-caja" class="btn" style="width: auto; text-decoration: none; display: inline-block;">📥 Exportar Cierre Contable (CSV)</a>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px;">
+                            <div style="background: var(--bg-main); padding: 15px; border-radius: 6px; border: 1px solid var(--border);">
+                                <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Total Recaudado</span>
+                                <h4 style="color: var(--success); font-size: 19px; margin: 5px 0 0 0;">Gs. {{ "{:,}".format(total_recaudado) }}</h4>
+                            </div>
+                            <div style="background: var(--bg-main); padding: 15px; border-radius: 6px; border: 1px solid var(--border);">
+                                <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Efectivo</span>
+                                <h4 style="color: var(--text-primary); font-size: 17px; margin: 5px 0 0 0;">Gs. {{ "{:,}".format(desglose.Efectivo) }}</h4>
+                            </div>
+                            <div style="background: var(--bg-main); padding: 15px; border-radius: 6px; border: 1px solid var(--border);">
+                                <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Tarjetas / POS</span>
+                                <h4 style="color: var(--accent); font-size: 17px; margin: 5px 0 0 0;">Gs. {{ "{:,}".format(desglose.Tarjeta) }}</h4>
+                            </div>
+                            <div style="background: var(--bg-main); padding: 15px; border-radius: 6px; border: 1px solid var(--border);">
+                                <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Transferencias</span>
+                                <h4 style="color: var(--text-primary); font-size: 17px; margin: 5px 0 0 0;">Gs. {{ "{:,}".format(desglose.Transferencia) }}</h4>
+                            </div>
+                        </div>
+
+                        <!-- GRÁFICOS VISUALES DE DISTRIBUCIÓN (INCLUYENDO EFECTIVO) -->
+                        <div class="box" style="margin-bottom: 25px; background: var(--bg-main);">
+                            <h4 style="color: var(--accent); font-size: 12px; text-transform: uppercase; margin-top: 0;">📊 Distribución de Ingresos por Método de Pago</h4>
+                            <div style="margin-bottom: 10px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 3px;">
+                                    <span>Tarjetas / POS (55%)</span><span>Gs. {{ "{:,}".format(desglose.Tarjeta) }}</span>
+                                </div>
+                                <div style="background: var(--card-bg); height: 7px; border-radius: 4px; overflow: hidden; border: 1px solid var(--border);">
+                                    <div style="background: var(--accent); width: 55%; height: 100%;"></div>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 3px;">
+                                    <span>Transferencias Bancarias (45%)</span><span>Gs. {{ "{:,}".format(desglose.Transferencia) }}</span>
+                                </div>
+                                <div style="background: var(--card-bg); height: 7px; border-radius: 4px; overflow: hidden; border: 1px solid var(--border);">
+                                    <div style="background: var(--success); width: 45%; height: 100%;"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 3px;">
+                                    <span>Efectivo en Caja (0%)</span><span>Gs. {{ "{:,}".format(desglose.Efectivo) }}</span>
+                                </div>
+                                <div style="background: var(--card-bg); height: 7px; border-radius: 4px; overflow: hidden; border: 1px solid var(--border);">
+                                    <div style="background: #3b82f6; width: 0%; height: 100%;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid" style="grid-template-columns: 1.3fr 0.7fr; gap: 24px;">
+                            <div>
+                                <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin-top: 0;">Historial de Cobros & Facturas Sifen (e-Kuatia)</h4>
+                                <table>
+                                    <tr><th>Paciente</th><th>Monto</th><th>Método</th><th>Estado Sifen / CDC</th><th>Acción</th></tr>
+                                    {% for item in pagos %}
+                                    <tr>
+                                        <td><b>{{ item.paciente }}</b></td>
+                                        <td>Gs. {{ "{:,}".format(item.monto|int) }}</td>
+                                        <td><span class="badge-pill">{{ item.metodo }}</span></td>
+                                        <td><span style="color: var(--success); font-weight: bold;">{{ item.sifen_status }}</span><br><small style="font-size: 10px; color: var(--text-secondary);">CDC: {{ item.cdc[:12] }}...</small></td>
+                                        <td><button class="btn" style="padding: 5px 8px; font-size: 10px; width: auto;" onclick="alert('Descargando KuDE PDF (Sifen):\nCDC: {{ item.cdc }}')">KuDE PDF</button></td>
+                                    </tr>
+                                    {% endfor %}
+                                </table>
+
+                                <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin-top: 25px;">Cuentas por Cobrar & Señas (Anticipos)</h4>
+                                <table>
+                                    <tr><th>Paciente</th><th>Concepto</th><th>Monto</th><th>Tipo</th></tr>
+                                    {% for c in cuentas %}
+                                    <tr>
+                                        <td><b>{{ c.paciente }}</b></td><td>{{ c.concepto }}</td><td>Gs. {{ "{:,}".format(c.monto|int) }}</td>
+                                        <td><span class="badge-pill" style="background: rgba(245, 158, 11, 0.1); color: var(--warning); border-color: rgba(245, 158, 11, 0.3);">{{ c.tipo }}</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </table>
+
+                                <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin-top: 25px;">🩺 Liquidación Automática de Honorarios Médicos (Split)</h4>
+                                <table style="font-size: 12px;">
+                                    <tr><th>Médico</th><th>Atenciones</th><th>Bruto</th><th>Neto Médico</th><th>Retención Aeterna</th><th>Estado</th></tr>
+                                    <tr><td><b>Dr. Fernando Acosta</b></td><td>12</td><td>Gs. 18M</td><td style="color: var(--success); font-weight: bold;">Gs. 12.6M</td><td>Gs. 5.4M</td><td><span class="badge-pill">Pendiente 🟡</span></td></tr>
+                                    <tr><td><b>Dra. Sofía Valiente</b></td><td>8</td><td>Gs. 12M</td><td style="color: var(--success); font-weight: bold;">Gs. 8.4M</td><td>Gs. 3.6M</td><td><span style="color: var(--success); font-weight: bold;">Liquidado 🟢</span></td></tr>
+                                </table>
+                            </div>
+
+                            <div style="background: var(--bg-main); padding: 20px; border-radius: 8px; border: 1px solid var(--border);">
+                                <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin-top: 0;">Registrar Cobro & Emitir Sifen</h4>
+                                <form action="/api/admin/registrar-pago" method="POST" onsubmit="setTimeout(() => window.location.reload(), 500);">
+                                    <div class="form-group"><label>Paciente / RUC:</label><input type="text" name="paciente" class="form-control" placeholder="Nombre / RUC" required></div>
+                                    <div class="form-group"><label>Monto (Gs.):</label><input type="number" name="monto" class="form-control" placeholder="1500000" required></div>
+                                    <div class="form-group"><label>Método de Pago:</label>
+                                        <select name="metodo" class="form-control">
+                                            <option value="Tarjeta">Tarjeta (POS)</option>
+                                            <option value="Transferencia">Transferencia Bancaria</option>
+                                            <option value="Efectivo">Efectivo</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group"><label>Referencia / POS:</label><input type="text" name="referencia" class="form-control" placeholder="Nro. de Lote"></div>
+                                    <button type="submit" class="btn">Registrar y Transmitir a Sifen 🧾</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% else %}
+                {% if seccion == 'reporte_longevidad' %}
+                    <div class="box">
+                        <h3>[Módulo Extra] Generador de Health Score Card (Reporte PDF)</h3>
+                        <p>Resumen biológico ejecutivo diseñado con estética minimalista y líneas doradas.</p>
+                        <div style="background: var(--bg-main); padding: 24px; border-radius: 8px; border: 1px solid var(--accent); margin-top: 15px;">
+                            <h4 style="color: var(--accent); margin-top: 0; font-size: 16px;">AETERNA INSTITUTO — REPORTE BIOLÓGICO</h4>
+                            <p><b>Paciente:</b> {{ p.nombre }} | <b>Edad Biológica:</b> 36 años (-6 años)</p>
+                            <a href="/api/generar-pdf/{{ p.id }}" target="_blank" class="btn" style="margin-top: 15px; width: auto; text-decoration: none; display: inline-block;">Generar y Descargar PDF Ejecutivo</a>
+                        </div>
+                    </div>
+                {% elif seccion == 'consentimientos' %}
+                    <div class="box">
+                        <h3>[Módulo Extra] Consentimientos Informados Digitales</h3>
+                        <p>Firma biométrica y digital para protocolos avanzados de medicina regenerativa.</p>
+                        <table>
+                            <tr><th>Protocolo / Tratamiento</th><th>Estado de Firma</th><th>Acción</th></tr>
+                            <tr><td><b>Sueroterapia Avanzada (NAD+ 500mg)</b></td><td><span style="color: var(--success); font-weight: bold;">Firmado Digitalmente</span></td><td><button class="btn" style="padding: 6px 10px; font-size: 11px; width: auto;" onclick="alert('Ver documento.')">Ver</button></td></tr>
+                        </table>
+                    </div>
+                {% elif seccion == 'alertas_predictivas' %}
+                    <div class="box">
+                        <h3>[Módulo Extra] Alertas Clínicas Predictivas (IA)</h3>
+                        <p>Detección temprana de desvíos en métricas nocturnas y biométricas en tiempo real.</p>
+                        <div style="background: var(--bg-main); padding: 20px; border-radius: 8px; border: 1px solid var(--border); margin-top: 15px;">
+                            <p style="color: var(--warning);"><b>⚠️ Alerta Nocturna Oura Ring:</b> Caída abrupta del HRV en {{ p.nombre }}.</p>
+                        </div>
+                    </div>
+                {% elif seccion == 'portal_paciente' %}
+                    <div class="box">
+                        <h3>Portal del Paciente (Vista Interactiva Móvil)</h3>
+                        <p>Simulación del portal donde el paciente completa su pre-consulta y revisa sus métricas.</p>
+                        
+                        <div style="background: var(--bg-main); padding: 24px; border-radius: 8px; border: 1px solid var(--accent); margin-top: 20px;">
+                            <h4 style="color: var(--accent); margin-top: 0; font-size: 16px;">Bienvenido, {{ p.nombre }}</h4>
+                            <p><b>Programa Activo:</b> {{ p.programa }} | <b>Médico Cabecera:</b> {{ p.medico }}</p>
+
+                            <hr style="border-color: var(--border); margin: 20px 0;">
+
+                            <h4 style="color: var(--accent); font-size: 13px; text-transform: uppercase;">📋 Cuestionario de Pre-Consulta (Anamnesis)</h4>
+                            <p style="font-size: 12px; color: var(--text-secondary);">Rellene este formulario para enviarlo directo a la Ficha Médica de su doctor en Aeterna.</p>
+                            
+                            <form id="formPreconsulta" onsubmit="enviarPreconsulta(event, '{{ p.id }}')">
+                                <div class="form-group">
+                                    <label>Principal motivo u objetivo de consulta:</label>
+                                    <input type="text" id="pc_motivo" class="form-control" value="{{ p.pre_consulta.motivo if p.pre_consulta else 'Optimización de energía y rendimiento' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Horas de sueño promedio:</label>
+                                    <input type="text" id="pc_sueno" class="form-control" value="{{ p.pre_consulta.sueno_horas if p.pre_consulta else '7 horas' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Suplementos o fármacos actuales:</label>
+                                    <input type="text" id="pc_suplementos" class="form-control" value="{{ p.pre_consulta.suplementos_actuales if p.pre_consulta else 'Ninguno' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Alergias conocidas:</label>
+                                    <input type="text" id="pc_alergias" class="form-control" value="{{ p.pre_consulta.alergias if p.pre_consulta else 'Ninguna' }}">
+                                </div>
+                                <button type="submit" class="btn">Enviar Pre-Consulta a Aeterna 🚀</button>
+                            </form>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="patient-selector">
+                        <span>Seleccionar Paciente:</span>
+                        {% for pat in pacientes %}
+                            <a href="/?rol=medico&seccion={{ seccion }}&id={{ pat.id }}" class="{% if pat.id == p.id %}active{% endif %}">{{ pat.nombre }} ({{ pat.edad }} años)</a>
+                        {% endfor %}
+                    </div>
+
+                    <div class="patient-card">
+                        <div>
+                            <h2 style="margin: 0 0 6px 0; font-size: 18px;">{{ p.nombre }} <small style="font-size: 12px; color: var(--text-secondary);">(ID: {{ p.id }})</small></h2>
+                            <p style="margin: 0; font-size: 13px;"><b>Programa:</b> {{ p.programa }} | <i>{{ p.medico }}</i></p>
+                        </div>
+                        <div><span class="badge-status">Cloud Sincronizado</span></div>
+                    </div>
+
+                    {% if seccion == 'paciente' %}
+                        <!-- FICHA MÉDICA INTEGRAL: DATOS ARRIBA Y FORMULARIO DE PRE-CONSULTA A ANCHO COMPLETO DEBAJO -->
+                        <div class="box">
+                            <h3>Datos Personales & Programa</h3>
+                            <p><b>Nombre Completo:</b> {{ p.nombre }} | <b>Edad:</b> {{ p.edad }} años | <b>Programa:</b> {{ p.programa }}</p>
+                            <p><b>Médico Tratante:</b> {{ p.medico }} | <b>Dispositivo Wearable:</b> {{ p.wearables.dispositivo }}</p>
+                        </div>
+
+                        <div class="box" style="border-color: var(--accent);">
+                            <h3>📋 Formulario de Pre-Consulta (Enviado por Paciente)</h3>
+                            {% if p.pre_consulta %}
+                                <p style="color: var(--success); font-weight: bold; margin-bottom: 12px;">{{ p.pre_consulta.estado }}</p>
+                                <p><b>Motivo Principal de Consulta:</b> {{ p.pre_consulta.motivo }}</p>
+                                <p><b>Promedio de Sueño Nocturno:</b> {{ p.pre_consulta.sueno_horas }}</p>
+                                <p><b>Suplementos Actuales:</b> {{ p.pre_consulta.suplementos_actuales }}</p>
+                                <p><b>Alergias o Restricciones:</b> {{ p.pre_consulta.alergias }}</p>
+                            {% else %}
+                                <p style="color: var(--warning);">⏳ Pendiente: El paciente aún no ha completado el formulario en su portal.</p>
+                            {% endif %}
+                        </div>
+                    {% elif seccion == 'biomarcadores' %}
+                        <div class="box">
+                            <h3>Matriz Longitudinal de Biomarcadores</h3>
+                            <table>
+                                <tr><th>Parámetro</th><th>Valor</th><th>Rango Óptimo</th><th>Estado</th></tr>
+                                {% for bio in p.biomarcadores %}
+                                <tr><td><b>{{ bio.parametro }}</b></td><td>{{ bio.valor }}</td><td>{{ bio.rango_optimo }}</td><td><span style="color: var(--success); font-weight: bold;">{{ bio.estado }}</span></td></tr>
+                                {% endfor %}
+                            </table>
+                        </div>
+                    {% elif seccion == 'recetas' %}
+                        <div class="grid">
+                            <div class="box">
+                                <h3>Recetas Activas</h3>
+                                <table>
+                                    <tr><th>Fórmula</th><th>Dosis</th><th>Categoría</th></tr>
+                                    {% for rec in p.recetas %}
+                                    <tr><td><b>{{ rec.medicamento }}</b></td><td>{{ rec.dosis }}</td><td><span class="badge-pill">{{ rec.tipo }}</span></td></tr>
+                                    {% endfor %}
+                                </table>
+                            </div>
+                            <div class="box">
+                                <h3>Emitir Receta</h3>
+                                <div class="form-group"><label>Fármaco:</label><input type="text" class="form-control" placeholder="Ej: NAD+"></div>
+                                <button class="btn" onclick="alert('Emitida.')">Firmar y Enviar</button>
+                            </div>
+                        </div>
+                    {% elif seccion == 'regenerativa' %}
+                        <div class="box">
+                            <h3>Protocolos Activos</h3>
+                            <table>
+                                <tr><th>Protocolo</th><th>Detalle</th></tr>
+                                {% for reg in p.regenerativa %}
+                                <tr><td><b>{{ reg.protocolo }}</b></td><td>{{ reg.detalle }}</td></tr>
+                                {% endfor %}
+                            </table>
+                        </div>
+                    {% elif seccion == 'wearables' %}
+                        <div class="box">
+                            <h3>Wearables & Calorimetría</h3>
+                            <p><b>Dispositivos:</b> {{ p.wearables.dispositivo }}</p>
+                            <p><b>Calorimetría:</b> {{ p.wearables.calorimetria }}</p>
+                        </div>
+                    {% elif seccion == 'ia' %}
+                        <div class="box">
+                            <h3>Transcripción Ambiental & SOAP</h3>
+                            <p><b>Subjetivo:</b> {{ p.ia_soap.subjetivo }}</p>
+                            <p><b>Plan:</b> {{ p.ia_soap.plan }}</p>
+                        </div>
+                    {% elif seccion == 'agenda' %}
+                        <div class="box">
+                            <h3>Agenda de Especialistas</h3>
+                            <table>
+                                <tr><th>Hora</th><th>Paciente</th><th>Sala</th><th>Estado</th></tr>
+                                <tr><td>09:00</td><td>Carlos Benítez</td><td>Medicina Metabólica</td><td><span style="color: var(--success); font-weight: bold;">Atendido</span></td></tr>
+                            </table>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    {% if rol != 'secretaria' %}
+    <div class="chat-widget-container">
+        <button class="chat-bubble-btn" onclick="toggleChat()">IA</button>
+        <div class="chat-window" id="chatWindow">
+            <div class="chat-header"><span>Asistente IA ({{ p.nombre }})</span><button class="chat-close-btn" onclick="toggleChat()">✕</button></div>
+            <div class="chat-history" id="chatHistory"><div class="chat-msg ai">Hola Doctor/a. ¿Qué desea consultar sobre {{ p.nombre }}?</div></div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInput" class="chat-input" placeholder="Pregunta clínica..." onkeypress="if(event.key === 'Enter') enviarConsulta('{{ p.id }}')">
+                <button class="btn" onclick="enviarConsulta('{{ p.id }}')" style="width: auto; padding: 8px 14px;">Enviar</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (localStorage.getItem('medysis_theme') === 'light') {
+                document.body.classList.add('light-mode');
+                const btn = document.getElementById('themeBtn');
+                if (btn) btn.textContent = "Tema: Claro";
+            }
+        });
+
+        function toggleTheme() {
+            const body = document.body;
+            body.classList.toggle('light-mode');
+            const btn = document.getElementById('themeBtn');
+            if (body.classList.contains('light-mode')) {
+                localStorage.setItem('medysis_theme', 'light');
+                btn.textContent = "Tema: Claro";
+            } else {
+                localStorage.setItem('medysis_theme', 'dark');
+                btn.textContent = "Tema: Oscuro";
+            }
+        }
+
+        function toggleChat() {
+            const win = document.getElementById('chatWindow');
+            win.style.display = (win.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        function enviarPreconsulta(event, idPaciente) {
+            event.preventDefault();
+            const data = {
+                id_paciente: idPaciente,
+                motivo: document.getElementById('pc_motivo').value,
+                sueno_horas: document.getElementById('pc_sueno').value,
+                suplementos_actuales: document.getElementById('pc_suplementos').value,
+                alergias: document.getElementById('pc_alergias').value
+            };
+            fetch('/api/paciente/guardar-preconsulta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(resp => {
+                alert('¡Pre-consulta enviada con éxito! Ya se encuentra sincronizada en la Ficha Médica de su doctor.');
+                window.location.reload();
+            });
+        }
+
+        function enviarConsulta(idPaciente) {
+            const input = document.getElementById('chatInput');
+            const history = document.getElementById('chatHistory');
+            const texto = input.value.trim();
+            if (!texto) return;
+            history.innerHTML += `<div class="chat-msg user">${texto}</div>`;
+            input.value = '';
+            history.scrollTop = history.scrollHeight;
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pregunta: texto, id: idPaciente })
+            })
+            .then(res => res.json())
+            .then(data => {
+                history.innerHTML += `<div class="chat-msg ai">${data.respuesta}</div>`;
+                history.scrollTop = history.scrollHeight;
+            });
+        }
+    </script>
+</body>
+</html>

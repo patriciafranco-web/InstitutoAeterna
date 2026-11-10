@@ -1,0 +1,118 @@
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); width: auto; text-decoration: none; font-size: 11.5px;">← VOLVER A MI AGENDA</a>
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <button type="button" class="btn" style="background: var(--accent); color: white; padding: 6px 12px; font-size: 11px;" onclick="window.print()">🖨️ Exportar Health Report (PDF)</button>
+        <span style="font-size: 13px; font-weight: 600; color: var(--accent);">Paciente en Atención: <b>{{ p.nombre }}</b></span>
+    </div>
+</div>
+
+<div class="box" style="border-color: var(--accent);">
+    <h3 style="color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 20px;">Módulo Wearables & Biometría Avanzada</h3>
+
+    <form action="/api/medico/guardar-wearables?token={{ token }}" method="POST">
+        <input type="hidden" name="id_paciente" value="{{ p.id }}">
+
+        <!-- ZONA SUPERIOR: ESTADO DE CONEXIÓN Y BOTÓN DE SINCRONIZACIÓN NATIVA -->
+        <div style="border: 2px dashed var(--accent); padding: 20px; border-radius: 8px; text-align: center; background: var(--bg-main); margin-bottom: 24px;">
+            <span style="font-size: 24px; display: block; margin-bottom: 4px;">⌚</span>
+            <p style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px 0;">Apple Health / Google Health Connect (Nativo)</p>
+            <button type="button" class="btn" style="background: var(--accent); color: white; padding: 8px 16px; font-size: 11px;" onclick="sincronizarSaludMovil('{{ p.id }}')">
+                🔄 Sincronizar Datos de Salud Móvil
+            </button>
+        </div>
+
+        <!-- ZONA CENTRAL: SPLIT VIEW (MÉTRICAS VIVAS VS CORRELACIÓN CLÍNICA) -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-bottom: 24px;">
+            
+            <!-- Columna Izquierda: Biomarcadores y Gráfico de Tendencia -->
+            <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin: 0;">Biomarcadores (Promedio 7 días)</h4>
+                    <span style="font-size: 10.5px; color: var(--success); font-weight: bold;">Tiempo Real</span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                    <div style="background: rgba(5, 150, 105, 0.08); border: 1px solid rgba(5, 150, 105, 0.3); padding: 12px; border-radius: 6px;">
+                        <label style="font-size: 11px; font-weight: bold; color: var(--success); display: block; margin-bottom: 4px;">HRV (Variabilidad):</label>
+                        <input type="text" name="valor_hrv" value="{% if proto_wearables and proto_wearables.hrv %}{{ proto_wearables.hrv }}{% else %}68 ms (Óptimo){% endif %}" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
+                    </div>
+                    <div style="background: rgba(5, 150, 105, 0.08); border: 1px solid rgba(5, 150, 105, 0.3); padding: 12px; border-radius: 6px;">
+                        <label style="font-size: 11px; font-weight: bold; color: var(--success); display: block; margin-bottom: 4px;">Sueño Profundo:</label>
+                        <input type="text" name="valor_sueno" value="{% if proto_wearables and proto_wearables.sueno %}{{ proto_wearables.sueno }}{% else %}1h 45m (18%){% endif %}" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
+                    </div>
+                </div>
+
+                <!-- Gráfico de Tendencia Vectorial (SVG) -->
+                <div style="background: #ffffff; border: 1px solid var(--border); padding: 12px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 11px; color: #555555; margin-bottom: 6px; font-weight: bold;">Evolución Gráfica de HRV (Últimas Semanas)</div>
+                    <svg viewBox="0 0 300 80" width="100%" height="80">
+                        <line x1="20" y1="25" x2="280" y2="25" stroke="#e5e7eb" stroke-dasharray="3" stroke-width="1"></line>
+                        <line x1="20" y1="55" x2="280" y2="55" stroke="#e5e7eb" stroke-dasharray="3" stroke-width="1"></line>
+                        <line x1="50" y1="50" x2="165" y2="35" stroke="#800020" stroke-width="2.5"></line>
+                        <line x1="165" y1="35" x2="250" y2="20" stroke="#800020" stroke-width="2.5"></line>
+                        <circle cx="50" cy="50" r="4" fill="#800020"></circle>
+                        <circle cx="165" cy="35" r="4" fill="#800020"></circle>
+                        <circle cx="250" cy="20" r="4" fill="#800020"></circle>
+                        <text x="50" y="72" fill="#666" font-size="9" text-anchor="middle">Sem 1</text>
+                        <text x="165" y="72" fill="#666" font-size="9" text-anchor="middle">Sem 2</text>
+                        <text x="250" y="72" fill="#666" font-size="9" text-anchor="middle">Actual</text>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Correlación Clínica -->
+            <div style="background: #ffffff; border: 1px solid var(--border); padding: 20px; border-radius: 8px; height: 320px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin-top: 0;">Correlación Biológica</h4>
+                    <p style="font-size: 12px; color: #555; line-height: 1.5;">
+                        El análisis cruzado indica una mejora del <b>14% en la recuperación nocturna</b> tras la aplicación de las sesiones en los protocolos de Biologics y Annovator.
+                    </p>
+                </div>
+                <div style="background: rgba(128, 0, 32, 0.05); padding: 12px; border-radius: 6px; border-left: 3px solid var(--accent);">
+                    <span style="font-size: 11px; font-weight: bold; color: var(--accent);">Sugerencia del Asistente:</span>
+                    <p style="font-size: 11.5px; margin: 4px 0 0 0; color: #333;">Mantener la ventana de ingesta 3 horas antes de dormir para optimizar la eficiencia del sueño profundo.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ZONA INFERIOR: CIERRE Y NOTAS -->
+        <div style="border-top: 1px solid var(--border); padding-top: 20px;">
+            <label style="font-size: 11.5px; font-weight: bold; color: var(--text-secondary); text-transform: uppercase; display: block; margin-bottom: 6px;">Notas del Médico sobre Biometría:</label>
+            <textarea name="observaciones" class="form-control" rows="2" placeholder="Escriba observaciones sobre los datos del wearable...">{% if proto_wearables %}{{ proto_wearables.observaciones }}{% endif %}</textarea>
+            
+            <div style="display: flex; justify-content: flex-end; margin-top: 15px;">
+                <button type="submit" class="btn" style="background: var(--success); color: white; font-size: 11.5px;">💾 Guardar en Expediente</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    function sincronizarSaludMovil(idPaciente) {
+        const datos = {
+            id_paciente: idPaciente,
+            hrv: "72 ms",
+            deep_sleep: "2h 10m",
+            heart_rate: "58 lpm"
+        };
+
+        fetch('/api/paciente/sincronizar-salud-movil', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(datos)
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert(data.mensaje);
+            location.reload();
+        });
+    }
+</script>
+
+<style>
+    @media print {
+        body { background: white; color: black; }
+        .sidebar, header, .ai-fab, form button, .btn, textarea, select { display: none !important; }
+        .box { border: none !important; box-shadow: none !important; padding: 0 !important; }
+    }
+</style>

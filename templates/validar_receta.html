@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Validación de Receta — Instituto Aeterna</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Inter', Arial, sans-serif; background-color: #f7f6f2; text-align: center; padding: 20px; color: #333; }
+        .caja-validacion { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 12px; 
+            max-width: 400px; 
+            margin: 40px auto; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            border-top: 5px solid #16a34a; 
+        }
+        .caja-validacion.invalida {
+            border-top: 5px solid #dc2626;
+        }
+        .valido { 
+            color: #16a34a; 
+            font-weight: bold; 
+            font-size: 20px; 
+            margin-top: 10px; 
+        }
+        .valido.invalido-txt {
+            color: #dc2626;
+        }
+        .datos { text-align: left; background: #f9fafb; padding: 15px; border-radius: 8px; font-size: 14px; margin-top: 20px; border: 1px solid #e5e7eb; }
+        .btn-dispensar { background: #800020; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 20px; text-transform: uppercase; }
+        .btn-dispensar:hover { background: #600018; }
+    </style>
+</head>
+<body>
+
+    <div class="caja-validacion {% if receta and receta.estado != 'Emitida' %}invalida{% endif %}">
+        <h2 style="color: #800020; margin-bottom: 5px; font-size: 18px;">Instituto Aeterna</h2>
+        
+        {% if receta %}
+            {% if receta.estado == 'Emitida' %}
+                <p style="font-size: 40px; margin: 5px 0;">✅</p>
+                <p class="valido">Receta Válida</p>
+            {% else %}
+                <p style="font-size: 40px; margin: 5px 0;">⚠️</p>
+                <p class="valido invalido-txt">Receta Ya Utilizada</p>
+                <p style="font-size: 12px; color: #666;">Dispensada el: {{ receta.fecha_dispensacion }}</p>
+            {% endif %}
+            
+            <div class="datos">
+                <p style="margin: 5px 0;"><strong>Paciente:</strong> {{ receta.nombre_paciente }}</p>
+                <p style="margin: 5px 0;"><strong>Médico:</strong> {{ receta.nombre_medico }}</p>
+                <p style="margin: 5px 0;"><strong>Fecha Emisión:</strong> {{ receta.fecha }}</p>
+                <p style="margin: 10px 0 0 0; word-break: break-all;"><span style="font-family: monospace; font-size: 11px; color: #555;">ID: {{ receta.id_receta }}</span></p>
+            </div>
+
+            {% if receta.estado == 'Emitida' %}
+            <form method="POST">
+                <button type="submit" class="btn-dispensar">Marcar como Dispensada</button>
+            </form>
+            {% endif %}
+        {% else %}
+            <p style="font-size: 40px; margin: 5px 0;">❌</p>
+            <p style="color: #dc2626; font-weight: bold;">Receta No Encontrada o Inválida</p>
+        {% endif %}
+        
+        <p style="font-size: 11px; color: #666; margin-top: 25px;">
+            Sanatorio Le Blanc (CDE) — Sistema de Control de Recetas Electrónicas.
+        </p>
+    </div>
+
+</body>
+</html>

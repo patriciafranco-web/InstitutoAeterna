@@ -1,0 +1,22 @@
+<div class="box">
+    <h3>Mi Agenda de Turnos de Hoy — {{ nombre_usuario }}</h3>
+    <p>Seleccione un paciente para acceder directamente a su Ficha y Evolución:</p>
+    {% if pacientes %}
+    <table>
+        <tr><th>Fecha y Hora</th><th>Paciente</th><th>Edad</th><th>Programa</th><th>Acción</th></tr>
+        {% for pat in pacientes %}
+        <tr>
+            <td><b>{{ pat.hora_turno }}</b></td>
+            <td>{{ pat.nombre }}</td>
+            <td>{{ pat.edad }} años</td>
+            <td>{{ pat.programa }}</td>
+            <td>
+                <a href="/?token={{ token }}&rol=medico&seccion=paciente&id={{ pat.id }}" class="btn" style="padding: 6px 12px; font-size: 11px; width: auto; text-decoration: none;">Atender Paciente</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p style="text-align: center; padding: 20px; color: var(--text-secondary);">No hay turnos agendados para hoy en su agenda personal.</p>
+    {% endif %}
+</div>

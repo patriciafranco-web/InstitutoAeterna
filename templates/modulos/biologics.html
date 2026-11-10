@@ -1,0 +1,166 @@
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); width: auto; text-decoration: none; font-size: 11.5px;">← VOLVER A MI AGENDA</a>
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <button type="button" class="btn" style="background: var(--accent); color: white; padding: 6px 12px; font-size: 11px;" onclick="window.print()">🖨️ Exportar Health Report (PDF)</button>
+        <span style="font-size: 13px; font-weight: 600; color: var(--accent);">Paciente en Atención: <b>{{ p.nombre }}</b></span>
+    </div>
+</div>
+
+<!-- BANNER DE ALERTA AUTOMÁTICA SI HAY RANGOS CRÍTICOS -->
+<div id="alertaCriticaBiologics" style="display: none; background: rgba(220, 38, 38, 0.15); border: 1px solid #dc2626; color: #dc2626; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 12.5px; font-weight: bold;">
+    ⚠️ Alerta Clínica: Se detectaron biomarcadores en rango severo/crítico. Se sugiere protocolo de derivación o ajuste inmediato.
+</div>
+
+<div class="box" style="border-color: var(--accent);">
+    <h3 style="color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 20px;">Módulo Biologics — Carga y Análisis Inteligente</h3>
+
+    <form action="/api/medico/guardar-biologics?token={{ token }}" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="id_paciente" value="{{ p.id }}">
+
+        <!-- ZONA SUPERIOR: CARGA DE ARCHIVO REAL (SELECTOR IDÉNTICO A OTROS ESTUDIOS) -->
+        <div style="border: 2px dashed var(--accent); padding: 25px; border-radius: 8px; text-align: center; background: var(--bg-main); margin-bottom: 24px;">
+            <span style="font-size: 26px; display: block; margin-bottom: 6px;">📄</span>
+            <p style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px 0;">Adjuntar Reporte PDF de Biologics</p>
+            <input type="file" name="archivo_pdf_biologics" accept=".pdf" class="form-control" style="font-size: 12px; color: var(--text-secondary); max-width: 400px; margin: 0 auto; background: white;">
+            <span style="font-size: 11px; color: var(--text-secondary); display: block; margin-top: 8px;">Seleccione el archivo PDF del estudio para cargar al expediente.</span>
+        </div>
+
+        <!-- ZONA CENTRAL: EL ESPEJO DE DATOS (SPLIT VIEW) -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-bottom: 24px;">
+            
+            <!-- Columna Izquierda: Datos Vivos, Alertas y Gráfico de Tendencia -->
+            <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin: 0;">Datos Vivos & Alertas</h4>
+                    <span style="font-size: 10.5px; color: var(--success); font-weight: bold;">Campos Editables</span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                    <div id="tarjetaIdo" style="background: rgba(220, 38, 38, 0.08); border: 1px solid rgba(220, 38, 38, 0.3); padding: 12px; border-radius: 6px;">
+                        <label style="font-size: 11px; font-weight: bold; color: #dc2626; display: block; margin-bottom: 4px;">IDO (Apnea-Hipopnea):</label>
+                        <input type="text" id="inputIDO" name="valor_ido" value="35 (Severo)" class="form-control" style="font-size: 12px; font-weight: bold; background: white; color: #dc2626;" oninput="verificarRangosBiologics()">
+                    </div>
+                    <div style="background: rgba(5, 150, 105, 0.08); border: 1px solid rgba(5, 150, 105, 0.3); padding: 12px; border-radius: 6px;">
+                        <label style="font-size: 11px; font-weight: bold; color: var(--success); display: block; margin-bottom: 4px;">SpO₂ Mínima:</label>
+                        <input type="text" name="valor_spo2" value="92%" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
+                    </div>
+                </div>
+
+                <!-- GRÁFICO DE TENDENCIA VECTORIAL (SVG) -->
+                <div style="background: #ffffff; border: 1px solid var(--border); padding: 12px; border-radius: 6px; text-align: center; margin-bottom: 15px;">
+                    <div style="font-size: 11px; color: #555555; margin-bottom: 6px; font-weight: bold;">Evolución Gráfica de Tendencia (IDO)</div>
+                    <svg viewBox="0 0 300 90" width="100%" height="90">
+                        <line x1="20" y1="30" x2="280" y2="30" stroke="#e5e7eb" stroke-dasharray="3" stroke-width="1"></line>
+                        <line x1="20" y1="60" x2="280" y2="60" stroke="#e5e7eb" stroke-dasharray="3" stroke-width="1"></line>
+                        <line x1="50" y1="20" x2="165" y2="40" stroke="#800020" stroke-width="2.5"></line>
+                        <line x1="165" y1="40" x2="250" y2="55" stroke="#800020" stroke-width="2.5"></line>
+                        <circle cx="50" cy="20" r="5" fill="#800020"></circle>
+                        <circle cx="165" cy="40" r="5" fill="#800020"></circle>
+                        <circle cx="250" cy="55" r="5" fill="#800020"></circle>
+                        <text x="50" y="10" fill="#000000" font-size="11" font-weight="bold" text-anchor="middle">42</text>
+                        <text x="165" y="30" fill="#000000" font-size="11" font-weight="bold" text-anchor="middle">38</text>
+                        <text x="250" y="45" fill="#000000" font-size="11" font-weight="bold" text-anchor="middle">35</text>
+                        <text x="50" y="80" fill="#666" font-size="9" text-anchor="middle">15/08/2026</text>
+                        <text x="165" y="80" fill="#666" font-size="9" text-anchor="middle">14/09/2026</text>
+                        <text x="250" y="80" fill="#666" font-size="9" text-anchor="middle">Actual</text>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Visor PDF Embebido -->
+            <div style="background: #ffffff; border: 1px solid var(--border); padding: 15px; border-radius: 8px; height: 380px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #666;">
+                <span style="font-size: 32px; margin-bottom: 8px;">📑</span>
+                <p style="font-size: 12px; font-weight: bold; margin: 0;">Visor PDF Embebido (Biologics)</p>
+                <span style="font-size: 11px; color: #888;">El reporte original se visualiza aquí en paralelo.</span>
+            </div>
+        </div>
+
+        <!-- ZONA INFERIOR: EL CIERRE (NOTAS, IA Y ASIGNACIÓN MULTIDISCIPLINARIA) -->
+        <div style="border-top: 1px solid var(--border); padding-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label style="font-size: 11.5px; font-weight: bold; color: var(--text-secondary); text-transform: uppercase;">Cuadro de Observaciones & Conclusiones:</label>
+                <button type="button" class="btn" style="background: var(--accent); color: white; padding: 4px 10px; font-size: 10.5px;" onclick="generarConclusionIABiologics('Biologics')">✨ Generar Conclusión con IA</button>
+            </div>
+            <textarea name="observaciones" id="txtObservacionesBiologics" class="form-control" rows="2" placeholder="Escriba notas o use la IA para redactar la conclusión del estudio...">{% if proto_biologics %}{{ proto_biologics.observaciones }}{% endif %}</textarea>
+
+            <!-- ASIGNACIÓN DE TAREAS AL EQUIPO MULTIDISCIPLINARIO -->
+            <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-top: 15px;">
+                <label style="font-size: 11px; font-weight: bold; color: var(--accent); display: block; margin-bottom: 8px; text-transform: uppercase;">⚡ Derivar / Notificar al Equipo Multidisciplinario:</label>
+                <div style="display: grid; grid-template-columns: 2fr 3fr 1fr; gap: 10px;">
+                    <select id="selectProfesional" class="form-control" style="font-size: 11.5px;">
+                        <option value="Manuel Duarte (Preparador Físico)">Manuel Duarte (Preparador Físico)</option>
+                        <option value="Lic. Ximena Ruiz (Nutrición Clínica)">Lic. Ximena Ruiz (Nutrición Clínica)</option>
+                        <option value="Dr. Alfredo Estigarribia (Odontología del Sueño)">Dr. Alfredo Estigarribia (Odontología del Sueño)</option>
+                    </select>
+                    <input type="text" id="inputNotaEquipo" placeholder="Indicación específica basada en el estudio..." class="form-control" style="font-size: 11.5px;">
+                    <button type="button" class="btn" style="background: var(--border); color: var(--text-primary); font-size: 11px;" onclick="enviarAlertaEquipo('{{ p.id }}')">Notificar</button>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                <button type="button" class="btn" style="background: rgba(248, 113, 113, 0.1); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); font-size: 11.5px;">🗑️ Borrar y Reemplazar</button>
+                <button type="submit" class="btn" style="background: var(--success); color: white; font-size: 11.5px;">💾 Guardar en Expediente</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    function verificarRangosBiologics() {
+        const val = document.getElementById('inputIDO').value;
+        const alerta = document.getElementById('alertaCriticaBiologics');
+        if(val.includes('35') || val.includes('40') || val.includes('50')) {
+            alerta.style.display = 'block';
+        } else {
+            alerta.style.display = 'none';
+        }
+    }
+    document.addEventListener("DOMContentLoaded", verificarRangosBiologics);
+
+    function generarConclusionIABiologics(modulo) {
+        const txtArea = document.getElementById('txtObservacionesBiologics');
+        txtArea.value = "⏳ Analizando biomarcadores y redactando conclusión clínica con IA...";
+        
+        fetch('/api/medico/ia-concluir-estudio', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({modulo: modulo, valores: "IDO: 35 (Severo), SpO2 Min: 92%"})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                txtArea.value = data.conclusion;
+            } else {
+                txtArea.value = "Error al generar conclusión automática.";
+            }
+        });
+    }
+
+    function enviarAlertaEquipo(idPaciente) {
+        const prof = document.getElementById('selectProfesional').value;
+        const nota = document.getElementById('inputNotaEquipo').value;
+        if(!nota.trim()) {
+            alert('Por favor, escriba una indicación o nota para el equipo.');
+            return;
+        }
+
+        fetch('/api/medico/asignar-equipo', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id_paciente: idPaciente, profesional: prof, mensaje_tarea: nota})
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert(data.mensaje);
+            document.getElementById('inputNotaEquipo').value = "";
+        });
+    }
+</script>
+
+<style>
+    @media print {
+        body { background: white; color: black; }
+        .sidebar, header, .ai-fab, form button, .btn, textarea, select { display: none !important; }
+        .box { border: none !important; box-shadow: none !important; padding: 0 !important; }
+    }
+</style>

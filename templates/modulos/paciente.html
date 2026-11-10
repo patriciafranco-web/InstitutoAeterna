@@ -1,0 +1,32 @@
+<div class="box" style="border-color: var(--accent);">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 20px;">
+        <h3 style="margin: 0; border: none; padding: 0;">Ficha & Pre-Consulta 360 — {{ p.nombre }}</h3>
+        <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--border); color: var(--text-primary); width: auto; text-decoration: none; font-size: 11px;">← Volver a mi Agenda</a>
+    </div>
+
+    <div class="ficha-card">
+        <div class="ficha-card-title">Identificación y Datos de Contacto</div>
+        <div class="ficha-grid-2">
+            <div>
+                <p class="ficha-row"><b>Paciente:</b> {{ p.nombre }} ({{ p.edad }} años)</p>
+                <p class="ficha-row"><b>Programa:</b> {{ p.programa }}</p>
+                <p class="ficha-row"><b>Nacionalidad / Residencia:</b> {{ pre_data.get('nacionalidad', 'N/A') }} / {{ pre_data.get('residencia', 'N/A') }}</p>
+                <p class="ficha-row"><b>Profesión / Ocupación:</b> {{ pre_data.get('profesion', 'N/A') }} ({{ pre_data.get('estado_civil', 'N/A') }})</p>
+                <p class="ficha-row"><b>Contacto de Emergencia:</b> {{ pre_data.get('contacto_emergencia', 'N/A') }}</p>
+            </div>
+            <div>
+                <p class="ficha-row"><b>Médico Tratante:</b> {{ p.medico }}</p>
+                <p class="ficha-row"><b>Teléfono / Correo:</b> {{ pre_data.get('telefono', 'N/A') }} / {{ pre_data.get('correo', 'N/A') }}</p>
+                <p class="ficha-row"><b>Wearable Principal:</b> {{ pre_data.get('wearable', 'Ninguno') }}</p>
+                <p class="ficha-row"><b>Autoevaluación de Salud:</b> {{ pre_data.get('salud_actual', 'N/A') }}/10</p>
+                <p class="ficha-row"><b>Compromiso con el Protocolo:</b> <span style="color: var(--success); font-weight: bold;">{{ p.compromiso }}</span></p>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-bottom: 25px; background: var(--bg-main); padding: 16px; border-radius: 8px; border: 1px solid var(--border); max-width: 50%;">
+        <label style="display: block; font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 6px; text-transform: uppercase;">Notas y Observaciones Clínicas (Libre):</label>
+        <textarea id="nota_libre_input" class="form-control" rows="1" placeholder="Escriba una nota clínica rápida..." style="font-size: 12px; padding: 8px 10px;">{{ p.observacion_medica_libre }}</textarea>
+        <button class="btn" style="width: auto; margin-top: 8px; font-size: 10.5px; padding: 6px 14px;" onclick="guardarNotaLibre('{{ p.id }}')">Guardar Nota</button>
+    </div>
+</div>

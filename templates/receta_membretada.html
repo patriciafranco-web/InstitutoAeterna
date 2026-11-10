@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Receta Oficial — Instituto Aeterna</title>
+    <style>
+        @page {
+            size: A5 portrait;
+            margin: 0;
+        }
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f7f6f2;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .hoja-a5 {
+            position: relative;
+            width: 148mm;
+            height: 210mm;
+            max-height: 210mm;
+            box-sizing: border-box;
+            background-color: #f7f6f2;
+            overflow: hidden;
+            page-break-after: avoid;
+            page-break-inside: avoid;
+        }
+
+        .membrete-superior-img {
+            position: absolute;
+            top: 4mm;
+            left: 4mm;      
+            width: 140mm;   
+            height: auto;
+        }
+
+        .bloque-superior {
+            position: absolute;
+            top: 26mm;     
+            left: 10mm;     
+            width: 128mm;   
+            box-sizing: border-box;
+        }
+
+        .fila-datos {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 9.5px; 
+            margin-bottom: 5px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #dcd7cc;
+            width: 100%;
+        }
+
+        .fila-datos-2 {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 9.5px;
+            margin-top: 4px;
+            width: 100%;
+        }
+
+        .area-prescripcion {
+            position: absolute;
+            top: 44mm;     
+            left: 10mm;     
+            width: 128mm;   
+            box-sizing: border-box;
+            font-size: 11px;
+            line-height: 1.6;
+        }
+
+        .bloque-inferior {
+            position: absolute;
+            top: 160mm;     
+            left: 10mm;     
+            width: 128mm;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            z-index: 10; 
+        }
+
+        /* Elevamos la imagen del footer despegándola del borde inferior */
+        .footer-inferior-img {
+            position: absolute;
+            bottom: 12mm; 
+            left: 0;
+            width: 148mm;
+            height: auto;
+            z-index: 1;
+        }
+
+        /* Botones de acción flotantes (Se ocultan automáticamente al imprimir o generar PDF) */
+        @media print {
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Botones flotantes de acción rápida -->
+<div class="no-print" style="position: fixed; top: 20px; right: 20px; z-index: 1000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; gap: 10px;">
+    <button onclick="window.print()" style="background: #800020; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 12px;">🖨️ Imprimir / Guardar PDF</button>
+    <button onclick="window.history.back()" style="background: #e5e7eb; color: #333; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;">Volver</button>
+</div>
+
+<div class="hoja-a5">
+    
+    <img src="{{ url_for('static', filename='membrete_superior.png') }}" class="membrete-superior-img" alt="Membrete Superior">
+
+    <div class="bloque-superior">
+        <div class="fila-datos">
+            <div><b>Paciente:</b> {{ p.nombre }}</div>
+            <div style="white-space: nowrap;"><b>Fecha:</b> <span id="fecha-hoy"></span></div>
+        </div>
+        <div class="fila-datos-2">
+            <div><b>Edad:</b> {{ p.edad }} años &nbsp;|&nbsp; <b>Programa:</b> {{ p.programa }}</div>
+            <div style="white-space: nowrap;"><b>Médico:</b> {{ nombre_usuario }}</div>
+        </div>
+    </div>
+
+    <div class="area-prescripcion">
+        <h4 style="color: #800020; text-transform: uppercase; font-size: 11px; margin: 0 0 8px 0; letter-spacing: 1px;">Indicaciones y Prescripción Médica:</h4>
+        <ol style="padding-left: 15px; line-height: 1.8; margin: 0;">
+            <li><b>Fórmula / Sueroterapia:</b> <i>(Detallar componentes y pauta de administración).</i></li>
+            <li><b>Suplementación / Protocolo:</b> <i>(Detallar dosis, frecuencia y duración).</i></li>
+        </ol>
+    </div>
+
+    <!-- Bloque Inferior con el Código QR -->
+    <div class="bloque-inferior">
+        <!-- Contenedor para poner el QR y el texto lado a lado -->
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <!-- QR de 65px con margen y protección flex-shrink -->
+            <img src="data:image/png;base64,{{ qr_base64 }}" alt="QR Validación" style="width: 65px; height: 65px; border: 1px solid #ddd; padding: 2px; border-radius: 4px; background: white; flex-shrink: 0;">
+            
+            <div style="font-size: 8.5px; color: #666; max-width: 140px; line-height: 1.2;">
+                Instituto Aeterna — Sanatorio Le Blanc (CDE)<br>
+                Documento respaldado por firma digital. <strong>Escanee el QR</strong> para validación oficial.
+            </div>
+        </div>
+        
+        <div style="text-align: center; border-top: 1px solid #333; width: 130px; padding-top: 4px; font-size: 10.5px; font-weight: bold;">
+            {{ nombre_usuario }}<br>
+            <span style="font-size: 9.5px; font-weight: normal; color: #555;">Reg. Prof. MSPBS</span>
+        </div>
+    </div>
+
+    <img src="{{ url_for('static', filename='footer_adn.png') }}" class="footer-inferior-img" alt="Footer ADN">
+
+</div>
+
+<script>
+    document.getElementById('fecha-hoy').innerText = new Date().toLocaleDateString('es-PY');
+</script>
+
+</body>
+</html>

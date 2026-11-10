@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Acceso — Instituto Aeterna</title>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background-color: #f4f6f9; color: #121110; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-box { background: #ffffff; border: 1px solid #d1d5db; padding: 40px; border-radius: 8px; width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+        h2 { color: #b8860b; text-align: center; text-transform: uppercase; font-size: 15px; letter-spacing: 1.5px; margin-top: 0; }
+        p.sub { text-align: center; font-size: 11px; color: #555770; margin-bottom: 25px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 11px; color: #555770; text-transform: uppercase; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; background: #f9fafb; border: 1px solid #d1d5db; border-radius: 6px; padding: 10px 12px; color: #121110; font-size: 13px; box-sizing: border-box; outline: none; }
+        .btn { background: #b8860b; color: #ffffff; border: none; padding: 12px; border-radius: 6px; width: 100%; font-weight: bold; font-size: 12px; text-transform: uppercase; cursor: pointer; margin-top: 10px; }
+        .error { color: #dc2626; font-size: 12px; text-align: center; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>Instituto Aeterna</h2>
+        <p class="sub">RUC: 80172292-6 — Sanatorio Le Blanc (CDE)</p>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <form method="POST">
+            <div class="form-group"><label>Usuario:</label><input type="text" name="username" required autofocus></div>
+            <div class="form-group"><label>Contraseña:</label><input type="password" name="password" required></div>
+            <button type="submit" class="btn">Iniciar Sesión</button>
+        </form>
+    </div>
+</body>
+</html>

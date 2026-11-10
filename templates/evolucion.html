@@ -1,0 +1,30 @@
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div style="display: flex; gap: 10px;">
+        <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); width: auto; text-decoration: none; font-size: 11.5px;">← VOLVER A MI AGENDA</a>
+        <button type="button" class="btn" style="background: var(--accent); color: #fff; padding: 8px 16px; font-size: 11.5px; width: auto;" onclick="guardarEvolucionSOAP()">GUARDAR EVOLUCIÓN</button>
+    </div>
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <button class="btn" style="background: var(--success); color: #fff; padding: 8px 16px; font-size: 11.5px; width: auto;" onclick="enviarLinkWhatsApp('{{ p.nombre }}', '{{ p.id }}')">ENVIAR WHATSAPP AL PACIENTE</button>
+        <span style="font-size: 13px; font-weight: 600; color: var(--accent);">Paciente en Atención: <b>{{ p.nombre }} ({{ p.edad }} años)</b></span>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+    <div class="box" style="margin-bottom: 0;">
+        <h3 style="color: var(--accent); font-size: 13px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">Evolución de Hoy & Consulta</h3>
+        <div class="form-group">
+            <label style="font-size: 11.5px; font-weight: bold; color: var(--text-secondary); margin-bottom: 6px; display: block;">Nota de Evolución / Hallazgos Clínicos:</label>
+            <textarea id="soap_input" class="form-control textarea-expandible" placeholder="Escriba la evolución clínica basada en la pre-consulta de hoy..."></textarea>
+        </div>
+    </div>
+
+    <div class="box" style="margin-bottom: 0;">
+        <h3 style="color: var(--accent); font-size: 13px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">Historial de Consultas Anteriores</h3>
+        <div class="doctor-accordion-header" onclick="toggleDoctorAcordeon('doc1')">
+            <span>Dr. Pedro Calabrese (Traumatología y Ortopedia)</span><span>▼</span>
+        </div>
+        <div id="doc1" class="doctor-consultas-list">
+            <div class="consulta-item"><b style="color: var(--accent);">14/09/2026:</b> Paciente refiere leve mejora en energía diurna.</div>
+        </div>
+    </div>
+</div>

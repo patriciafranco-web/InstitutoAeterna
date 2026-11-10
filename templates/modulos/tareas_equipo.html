@@ -1,0 +1,35 @@
+<div class="box">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 20px;">
+        <h3 style="margin: 0; color: var(--accent);">Bandeja de Derivaciones y Tareas Clínicas</h3>
+        <span class="badge-bordo">Instituto Aeterna — Multidisciplinario</span>
+    </div>
+
+    {% if tareas_pendientes %}
+    <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+        <thead>
+            <tr style="border-bottom: 1px solid var(--border); color: var(--text-secondary);">
+                <th style="padding: 10px;">Fecha</th>
+                <th style="padding: 10px;">Paciente</th>
+                <th style="padding: 10px;">Médico Emisor</th>
+                <th style="padding: 10px;">Indicación / Tarea</th>
+                <th style="padding: 10px; text-align: center;">Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in tareas_pendientes %}
+            <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 10px;"><b>{{ t.fecha }}</b></td>
+                <td style="padding: 10px;">{{ t.nombre_paciente }}</td>
+                <td style="padding: 10px;">{{ t.medico_emisor }}</td>
+                <td style="padding: 10px; color: var(--text-primary); font-weight: 500;">{{ t.mensaje_tarea }}</td>
+                <td style="padding: 10px; text-align: center;">
+                    <a href="/api/equipo/completar-tarea/{{ t.id }}?token={{ token }}" class="btn" style="background: var(--success); color: white; padding: 4px 10px; font-size: 10.5px; text-decoration: none;">✓ Marcar Realizado</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: var(--text-secondary); padding: 30px;">No tienes tareas o derivaciones pendientes en este momento.</p>
+    {% endif %}
+</div>

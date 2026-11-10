@@ -1,0 +1,109 @@
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); width: auto; text-decoration: none; font-size: 11.5px;">← VOLVER A MI AGENDA</a>
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <button class="btn" style="background: var(--success); color: #fff; padding: 8px 16px; font-size: 11.5px; width: auto;" onclick="enviarLinkWhatsApp('{{ p.nombre }}', '{{ p.id }}')">ENVIAR WHATSAPP AL PACIENTE</button>
+        <span style="font-size: 13px; font-weight: 600; color: var(--accent);">Paciente en Atención: <b>{{ p.nombre }} ({{ p.edad }} años)</b></span>
+    </div>
+</div>
+
+<div class="box" style="border-color: var(--accent);">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 20px;">
+        <h3 style="margin: 0; border: none; padding: 0; color: var(--accent);">Protocolos de Medicina Regenerativa & Infusiones</h3>
+        <span class="badge-bordo">Control Clínico Aeterna</span>
+    </div>
+
+    <form action="/api/medico/guardar-protocolo-regenerativo?token={{ token }}" method="POST">
+        <input type="hidden" name="id_paciente" value="{{ p.id }}">
+        
+        <div class="form-group" style="margin-bottom: 25px;">
+            <label style="font-size: 11.5px; font-weight: bold; color: var(--accent); margin-bottom: 6px; display: block; text-transform: uppercase;">Diagnóstico Clínico / Indicación Regenerativa (DX):</label>
+            <textarea name="diagnostico_dx" class="form-control" rows="2" style="font-size: 13px;">{% if protocolo_reg %}{{ protocolo_reg.diagnostico_dx }}{% else %}Síndrome de Fatiga Crónica Mitocondrial & Desgaste Energético por Estrés Oxidativo.{% endif %}</textarea>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin: 0;">Seguimiento de Sesiones y Signos Vitales</h4>
+            <button type="button" class="btn" style="background: var(--success); color: white; padding: 6px 12px; font-size: 11px;" onclick="agregarSesionRegenerativa()">➕ Agregar Sesión</button>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 11.5px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border); color: var(--text-secondary);">
+                    <th style="padding: 10px; width: 10%;">Sesión</th>
+                    <th style="padding: 10px; width: 12%;">Fecha</th>
+                    <th style="padding: 10px; width: 23%;">Protocolo / Infusión</th>
+                    <th style="padding: 10px; width: 18%;">Signos Vitales PRE (PA / FC / Sat)</th>
+                    <th style="padding: 10px; width: 18%;">Signos Vitales POST (PA / FC / Sat)</th>
+                    <th style="padding: 10px; width: 19%;">Observaciones</th>
+                </tr>
+            </thead>
+            <tbody id="tablaSesionesBody">
+                {% set sesiones_default = [
+                    {"numero": "Sesión 01", "fecha": "15/09/2026", "protocolo": "Sueroterapia NAD+ 250mg", "pa_pre": "120/80", "fc_pre": "72", "sat_pre": "98%", "pa_post": "118/78", "fc_post": "70", "sat_post": "99%", "observacion": "Buena tolerancia."},
+                    {"numero": "Sesión 02", "fecha": "30/09/2026", "protocolo": "Sueroterapia NAD+ 500mg", "pa_pre": "118/76", "fc_pre": "75", "sat_pre": "97%", "pa_post": "120/80", "fc_post": "72", "sat_post": "98%", "observacion": "Aumento de energía diurna."},
+                    {"numero": "Sesión 03", "fecha": "14/10/2026", "protocolo": "Sueroterapia NAD+ 500mg", "pa_pre": "122/82", "fc_pre": "70", "sat_pre": "99%", "pa_post": "118/76", "fc_post": "68", "sat_post": "99%", "observacion": "Sueño mejorado."},
+                    {"numero": "Sesión 04", "fecha": "Pendiente", "protocolo": "Mantenimiento Quincenal", "pa_pre": "", "fc_pre": "", "sat_pre": "", "pa_post": "", "fc_post": "", "sat_post": "", "observacion": "Agendado Sala VIP."}
+                ] %}
+
+                {% set lista_sesiones = json.loads(protocolo_reg.sesiones_json) if protocolo_reg and protocolo_reg.sesiones_json else sesiones_default %}
+                
+                {% for s in lista_sesiones %}
+                <tr style="border-bottom: 1px solid var(--border);" class="sesion-row">
+                    <td style="padding: 10px; font-weight: bold; color: var(--accent);" class="sesion-label">{{ s.numero }}</td>
+                    <td style="padding: 10px;"><input type="text" name="fecha_{{ loop.index }}" value="{{ s.fecha }}" class="form-control" style="font-size: 11px; padding: 5px;"></td>
+                    <td style="padding: 10px;"><input type="text" name="protocolo_{{ loop.index }}" value="{{ s.protocolo }}" class="form-control" style="font-size: 11px; padding: 5px;"></td>
+                    <td style="padding: 10px;">
+                        <div style="display: flex; gap: 4px;">
+                            <input type="text" name="pa_pre_{{ loop.index }}" value="{{ s.pa_pre }}" placeholder="PA" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                            <input type="text" name="fc_pre_{{ loop.index }}" value="{{ s.fc_pre }}" placeholder="FC" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                            <input type="text" name="sat_pre_{{ loop.index }}" value="{{ s.sat_pre }}" placeholder="Sat" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                        </div>
+                    </td>
+                    <td style="padding: 10px;">
+                        <div style="display: flex; gap: 4px;">
+                            <input type="text" name="pa_post_{{ loop.index }}" value="{{ s.pa_post }}" placeholder="PA" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                            <input type="text" name="fc_post_{{ loop.index }}" value="{{ s.fc_post }}" placeholder="FC" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                            <input type="text" name="sat_post_{{ loop.index }}" value="{{ s.sat_post }}" placeholder="Sat" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                        </div>
+                    </td>
+                    <td style="padding: 10px;"><input type="text" name="observacion_{{ loop.index }}" value="{{ s.observacion }}" class="form-control" style="font-size: 11px; padding: 5px;"></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <button type="submit" class="btn" style="background: var(--accent); color: white;">GUARDAR PROTOCOLO REGENERATIVO</button>
+    </form>
+</div>
+
+<script>
+    function agregarSesionRegenerativa() {
+        const tbody = document.getElementById('tablaSesionesBody');
+        const totalFilas = tbody.getElementsByClassName('sesion-row').length + 1;
+        const numeroStr = totalFilas < 10 ? '0' + totalFilas : totalFilas;
+
+        const tr = document.createElement('tr');
+        tr.className = 'sesion-row';
+        tr.style.borderBottom = '1px solid var(--border)';
+        tr.innerHTML = `
+            <td style="padding: 10px; font-weight: bold; color: var(--accent);" class="sesion-label">Sesión ${numeroStr}</td>
+            <td style="padding: 10px;"><input type="text" name="fecha_${totalFilas}" value="Pendiente" class="form-control" style="font-size: 11px; padding: 5px;"></td>
+            <td style="padding: 10px;"><input type="text" name="protocolo_${totalFilas}" value="Sueroterapia / Infusión" class="form-control" style="font-size: 11px; padding: 5px;"></td>
+            <td style="padding: 10px;">
+                <div style="display: flex; gap: 4px;">
+                    <input type="text" name="pa_pre_${totalFilas}" placeholder="PA" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                    <input type="text" name="fc_pre_${totalFilas}" placeholder="FC" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                    <input type="text" name="sat_pre_${totalFilas}" placeholder="Sat" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                </div>
+            </td>
+            <td style="padding: 10px;">
+                <div style="display: flex; gap: 4px;">
+                    <input type="text" name="pa_post_${totalFilas}" placeholder="PA" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                    <input type="text" name="fc_post_${totalFilas}" placeholder="FC" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                    <input type="text" name="sat_post_${totalFilas}" placeholder="Sat" class="form-control" style="font-size: 11px; padding: 4px; text-align: center;">
+                </div>
+            </td>
+            <td style="padding: 10px;"><input type="text" name="observacion_${totalFilas}" value="" class="form-control" style="font-size: 11px; padding: 5px;"></td>
+        `;
+        tbody.appendChild(tr);
+    }
+</script>

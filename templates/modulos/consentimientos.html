@@ -1,0 +1,82 @@
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); width: auto; text-decoration: none; font-size: 11.5px;">← VOLVER A MI AGENDA</a>
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <button type="button" class="btn" style="background: var(--accent); color: white; padding: 6px 12px; font-size: 11px;" onclick="window.print()">🖨️ Imprimir Consentimiento Autocompletado</button>
+        <span style="font-size: 13px; font-weight: 600; color: var(--accent);">Paciente en Atención: <b>{{ p.nombre }} ({{ p.edad }} años)</b></span>
+    </div>
+</div>
+
+<div class="box" style="border-color: var(--accent);">
+    <h3 style="color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 20px;">Módulo de Consentimientos Informados & Contratos Legales</h3>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+        
+        <!-- VENTANA IZQUIERDA: CONFIGURACIÓN Y SELECCIÓN DE PLANTILLA -->
+        <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px;">
+            <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin-top: 0; margin-bottom: 15px;">Generador de Documento Legal</h4>
+
+            <form action="/api/medico/guardar-consentimiento?token={{ token }}" method="POST">
+                <input type="hidden" name="id_paciente" value="{{ p.id }}">
+
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="font-size: 11px; font-weight: bold; color: var(--text-secondary); display: block; margin-bottom: 5px; text-transform: uppercase;">Plantilla Institucional:</label>
+                    <select name="tipo_plantilla" class="form-control" style="font-size: 12px; background: white;">
+                        <option value="Consentimiento para Sueroterapia & Infusiones IV">Consentimiento para Sueroterapia & Infusiones IV</option>
+                        <option value="Contrato de Tratamiento de Medicina Regenerativa & Longevidad">Contrato de Tratamiento de Medicina Regenerativa & Longevidad</option>
+                        <option value="Consentimiento Informado para Protocolo Biologics">Consentimiento Informado para Protocolo Biologics</option>
+                        <option value="Autorización de Monitoreo con Dispositivos Wearables">Autorización de Monitoreo con Dispositivos Wearables</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="font-size: 11px; font-weight: bold; color: var(--text-secondary); display: block; margin-bottom: 5px; text-transform: uppercase;">Cláusulas / Observaciones Adicionales (Opcional):</label>
+                    <textarea name="clausulas_adicionales" class="form-control" rows="4" placeholder="Agregue indicaciones particulares o restricciones si es necesario...">{% if proto_consentimiento %}{{ proto_consentimiento.clausulas_adicionales }}{% endif %}</textarea>
+                </div>
+
+                <button type="submit" class="btn" style="background: var(--accent); color: white; width: 100%; font-size: 11.5px; padding: 10px;">💾 Registrar en Expediente</button>
+            </form>
+        </div>
+
+        <!-- VENTANA DERECHA: VISTA PREVIA LEGAL AUTOCOMPLETADA -->
+        <div style="background: #ffffff; border: 1px solid var(--border); padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-bottom: 15px;">
+                <div>
+                    <h4 style="margin: 0; color: var(--accent); font-size: 14px;">INSTITUTO AETERNA E.A.S.</h4>
+                    <span style="font-size: 10px; color: #666;">Sanatorio Le Blanc (CDE) — RUC: 80172292-6</span>
+                </div>
+                <span style="background: rgba(5, 150, 105, 0.1); color: var(--success); border: 1px solid rgba(5, 150, 105, 0.3); padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;">DOCUMENTO LEGAL VÁLIDO</span>
+            </div>
+
+            <div style="background: var(--bg-main); padding: 12px; border-radius: 6px; font-size: 11.5px; margin-bottom: 15px; border: 1px solid var(--border);">
+                <p style="margin: 2px 0;"><b>Paciente:</b> {{ p.nombre }} ({{ p.edad }} años)</p>
+                <p style="margin: 2px 0;"><b>Programa Clínico:</b> {{ p.programa }}</p>
+                <p style="margin: 2px 0;"><b>Médico Tratante:</b> {{ session.get('nombre_' + token, 'Dr. Pedro Calabrese') }} ({{ p.reg_profesional }})</p>
+                <p style="margin: 2px 0;"><b>Fecha de Emisión:</b> {{ datetime_actual if datetime_actual else '2026-10-20' }}</p>
+            </div>
+
+            <h5 style="color: var(--accent); text-transform: uppercase; font-size: 12px; margin-bottom: 6px;">Consentimiento Informado & Términos Clínicos</h5>
+            <p style="font-size: 11.5px; color: #444; line-height: 1.5; margin-bottom: 20px;">
+                Por medio del presente documento, el/la paciente <b>{{ p.nombre }}</b> manifiesta haber recibido información detallada, clara y suficiente respecto al protocolo médico, los objetivos de optimización biológica y los procedimientos de medicina regenerativa a ser aplicados en el Instituto Aeterna E.A.S. El paciente autoriza expresamente la realización de las terapias bajo estricto monitoreo clínico.
+            </p>
+
+            <div style="display: flex; justify-content: space-between; margin-top: 40px; text-align: center;">
+                <div style="border-top: 1px solid #333; width: 45%; padding-top: 5px;">
+                    <span style="font-size: 11px; font-weight: bold; display: block;">{{ p.nombre }}</span>
+                    <span style="font-size: 9.5px; color: #666;">Firma del Paciente / C.I.</span>
+                </div>
+                <div style="border-top: 1px solid #333; width: 45%; padding-top: 5px;">
+                    <span style="font-size: 11px; font-weight: bold; display: block;">{{ session.get('nombre_' + token, 'Dr. Pedro Calabrese') }}</span>
+                    <span style="font-size: 9.5px; color: #666;">Firma y Sello Médico</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media print {
+        body { background: white; color: black; }
+        .sidebar, header, .ai-fab, form, .btn { display: none !important; }
+        .box { border: none !important; box-shadow: none !important; padding: 0 !important; }
+    }
+</style>
