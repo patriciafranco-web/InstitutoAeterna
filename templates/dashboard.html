@@ -207,15 +207,17 @@
                     <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
                         <div>
                             <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: bold;">Estado del Timbrado Sifen</span>
-                            <div style="font-size: 14px; font-weight: bold; color: var(--accent); margin-top: 8px;">Aprobado y Conectado (.pfx Activo)</div>
+                            <div style="font-size: 13px; font-weight: bold; color: {% if valido_pfx %}var(--success){% else %}#dc2626{% endif %}; margin-top: 8px;">
+                                {{ mensaje_pfx }}
+                            </div>
                         </div>
-                        <span style="font-size: 28px;">🟢</span>
+                        <span style="font-size: 28px;">{% if valido_pfx %}🟢{% else %}🔴{% endif %}</span>
                     </div>
                 </div>
 
                 <!-- Formulario interactivo para probar el cobro y previsualización Sifen -->
                 <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-                    <h4 style="color: var(--accent); margin-top: 0; font-size: 13px; text-transform: uppercase;">Registrar Servicio, Monto y Emitir Sifen</h4>
+                    <h4 style="color: var(--accent); margin-top: 0; font-size: 13px; text-transform: uppercase;">Registrar Servicio, Monto y Previsualizar Sifen</h4>
                     <form action="/api/caja/registrar-pago?token={{ token }}" method="POST" style="display: grid; grid-template-columns: 2fr 2fr 1fr 1fr 1fr; gap: 10px; align-items: end;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label style="font-size: 10.5px;">Paciente / Cliente:</label>
@@ -237,7 +239,7 @@
                                 <option value="Transferencia">Transf.</option>
                             </select>
                         </div>
-                        <button type="submit" class="btn" style="background: var(--success); font-size: 11px; padding: 9px 12px; height: 37px;">🧾 Emitir Sifen</button>
+                        <button type="submit" class="btn" style="background: var(--success); font-size: 11px; padding: 9px 12px; height: 37px;">👁️ Previsualizar Sifen</button>
                     </form>
                 </div>
 
