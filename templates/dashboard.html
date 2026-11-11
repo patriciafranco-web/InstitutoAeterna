@@ -479,7 +479,7 @@
                         <h3 style="margin: 0; border: none; padding: 0; color: var(--accent);">Solicitar Exámenes Laboratoriales (Listas Oficiales Aeterna)</h3>
                         <span class="badge-bordo">LIS Sincronizado</span>
                     </div>
-                    <form action="/api/medico/generar-orden-lab?token={{ token }}" method="POST">
+                    <form action="/api/medico/generar-orden-lab?token={{ token }}" method="POST" target="_blank">
                         <input type="hidden" name="id_paciente" value="{{ p.id }}">
                         <div style="max-height: 480px; overflow-y: auto; padding-right: 10px; margin-bottom: 20px;">
                             {% if laboratorios_aeterna %}
