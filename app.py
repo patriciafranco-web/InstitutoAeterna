@@ -1332,10 +1332,14 @@ def imprimir_receta(id_paciente):
     db.session.add(nueva_receta)
     db.session.commit()
     
+    # Aquí pasamos p.receta_texto formateado
+    texto_receta_html = p.receta_texto.replace('\n', '<br>')
+    
     return render_template('receta_membretada.html', 
                            p=p, 
                            nombre_usuario=nombre_medico,
-                           qr_base64=qr_base64)
+                           qr_base64=qr_base64,
+                           texto_imprimir=f"<b>INDICACIONES Y PRESCRIPCIÓN MÉDICA:</b><br><br>{texto_receta_html}")
 
 @app.route('/validar/<id_receta>', methods=['GET', 'POST'])
 def validar_receta(id_receta):
@@ -1522,17 +1526,17 @@ def generar_orden_lab():
         
     nombre_medico = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
     
-    # 1. Formatear la lista de estudios seleccionados
     if not estudios_seleccionados:
         return "No se seleccionó ningún estudio.", 400
         
-    texto_orden = "SOLICITUD DE EXÁMENES LABORATORIALES:\n\n"
+    # Formatear la lista con saltos de línea HTML (<br>) para que se vea bien en el PDF
+    texto_orden = "<b>SOLICITUD DE EXÁMENES LABORATORIALES:</b><br><br>"
     for i, est in enumerate(estudios_seleccionados, 1):
-        texto_orden += f"{i}. {est}\n"
+        texto_orden += f"{i}. {est}<br>"
         
-    texto_orden += "\nMotivo / Diagnóstico: Control Clínico y Mapeo Metabólico Aeterna."
+    texto_orden += "<br><b>Motivo / Diagnóstico:</b> Control Clínico y Mapeo Metabólico Aeterna."
     
-    # 2. Generar un QR de seguridad (mantiene el mismo estándar de las recetas)
+    # Generar QR
     id_orden = str(uuid.uuid4())
     url_validacion = f"{request.host_url}validar/{id_orden}"
     qr = qrcode.QRCode(box_size=5, border=3)
@@ -1543,15 +1547,12 @@ def generar_orden_lab():
     img_qr.save(buffer, format="PNG")
     qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
     
-    # 3. TRUCO DE MEMBRETE: Inyectamos los laboratorios en el campo de texto 
-    # de la receta solo en memoria temporal (sin hacer db.session.commit). 
-    # Así, la plantilla de la receta imprimirá los laboratorios con el mismo formato.
-    p.receta_texto = texto_orden
-    
+    # Pasamos el texto_orden como una variable directa a la plantilla
     return render_template('receta_membretada.html', 
                            p=p, 
                            nombre_usuario=nombre_medico,
-                           qr_base64=qr_base64)
+                           qr_base64=qr_base64,
+                           texto_imprimir=texto_orden)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True, port=5000)
