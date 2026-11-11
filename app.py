@@ -689,7 +689,7 @@ PORTAL_PRECONSULTA_TEMPLATE = """<!DOCTYPE html>
                 variabilidad_cardiaca_hrv: "72 ms (Excelente recuperación)",
                 entrenamientos_registrados: "5 sesiones semanales (Fuerza + HIIT)"
             };
-            document.getElementById('datos_wearable_json').value = JSON.stringify(reporteCompleto);
+            document.getElementById('datos_wearable_json').value = JSON.stringify(reporteCompletop);
             msg.innerText = "✅ ¡Dispositivo sincronizado! Todos los datos de salud se adjuntarán al enviar el cuestionario.";
         }, 1200);
     }
@@ -813,6 +813,9 @@ def index():
 
     tareas_pendientes = TareaEquipoModel.query.filter_by(profesional_destinatario=nombre_usuario, estado="Pendiente").all()
 
+    # Validar certificado PFX para inyectar su estado real en la vista
+    valido_pfx, mensaje_pfx = validar_certificado_pfx()
+
     return render_template(
         'dashboard.html', 
         token=token,
@@ -840,6 +843,8 @@ def index():
         historial_consultas=historial_consultas,
         fotos_clinicas=fotos_clinicas,
         tareas_pendientes=tareas_pendientes,
+        valido_pfx=valido_pfx,
+        mensaje_pfx=mensaje_pfx,
         json=json
     )
 
