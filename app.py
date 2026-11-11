@@ -1507,5 +1507,51 @@ def editar_examen_lab(id_estudio):
 
     return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
 
+@app.route('/api/medico/generar-orden-lab', methods=['POST'])
+def generar_orden_lab():
+    token = request.args.get('token')
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
+    
+    id_paciente = request.form.get('id_paciente')
+    estudios_seleccionados = request.form.getlist('estudios')
+    
+    p = PacienteModel.query.filter_by(id=id_paciente).first()
+    if not p:
+        return "Paciente no encontrado", 404
+        
+    nombre_medico = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
+    
+    # 1. Formatear la lista de estudios seleccionados
+    if not estudios_seleccionados:
+        return "No se seleccionó ningún estudio.", 400
+        
+    texto_orden = "SOLICITUD DE EXÁMENES LABORATORIALES:\n\n"
+    for i, est in enumerate(estudios_seleccionados, 1):
+        texto_orden += f"{i}. {est}\n"
+        
+    texto_orden += "\nMotivo / Diagnóstico: Control Clínico y Mapeo Metabólico Aeterna."
+    
+    # 2. Generar un QR de seguridad (mantiene el mismo estándar de las recetas)
+    id_orden = str(uuid.uuid4())
+    url_validacion = f"{request.host_url}validar/{id_orden}"
+    qr = qrcode.QRCode(box_size=5, border=3)
+    qr.add_data(url_validacion)
+    qr.make(fit=True)
+    img_qr = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    img_qr.save(buffer, format="PNG")
+    qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    
+    # 3. TRUCO DE MEMBRETE: Inyectamos los laboratorios en el campo de texto 
+    # de la receta solo en memoria temporal (sin hacer db.session.commit). 
+    # Así, la plantilla de la receta imprimirá los laboratorios con el mismo formato.
+    p.receta_texto = texto_orden
+    
+    return render_template('receta_membretada.html', 
+                           p=p, 
+                           nombre_usuario=nombre_medico,
+                           qr_base64=qr_base64)
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True, port=5000)
