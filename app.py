@@ -18,8 +18,31 @@ import io
 import base64
 import uuid
 
+# Librerías para Facturación Electrónica Sifen (.pfx)
+from cryptography.hazmat.primitives.serialization import pkcs12
+
+SIFEN_CERT_PATH = os.getenv('SIFEN_CERT_PATH', '/etc/secrets/certificado.pfx')
+if not os.path.exists(SIFEN_CERT_PATH):
+    SIFEN_CERT_PATH = 'certificado.pfx' # Respaldo local si se prueba en PC
+
+SIFEN_CERT_PASS = os.getenv('SIFEN_CERT_PASS', '')
+
 def extraer_texto(response):
     return "".join(b.text for b in response.content if b.type == "text")
+
+def validar_certificado_pfx():
+    """Valida que el archivo .pfx exista y que la contraseña sea correcta"""
+    if not os.path.exists(SIFEN_CERT_PATH):
+        return False, "El archivo del certificado (.pfx) no se encuentra en el servidor."
+    try:
+        with open(SIFEN_CERT_PATH, "rb") as f:
+            pfx_data = f.read()
+        private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
+            pfx_data, SIFEN_CERT_PASS.encode('utf-8')
+        )
+        return True, "Certificado digital Sifen cargado y verificado correctamente."
+    except Exception as e:
+        return False, f"Error al abrir el certificado (contraseña incorrecta o archivo corrupto): {str(e)}"
 
 # 1. CONEXIÓN DEFINITIVA A ANTHROPIC
 client = anthropic.Anthropic()
@@ -177,14 +200,14 @@ class TareaEquipoModel(db.Model):
     fecha = db.Column(db.String(50), default=datetime.date.today().strftime('%d/%m/%Y'))
     estado = db.Column(db.String(50), default="Pendiente")
 
-# NUEVO MODELO PARA ESTUDIOS SOLICITADOS
+# MODELO PARA ESTUDIOS SOLICITADOS
 class EstudioSolicitadoModel(db.Model):
     __tablename__ = 'estudios_solicitados'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     id_paciente = db.Column(db.String(50), nullable=False)
     fecha = db.Column(db.String(50), nullable=False)
     medico = db.Column(db.String(150), nullable=False)
-    estudios_texto = db.Column(db.Text, nullable=False) # Guardará la lista separada por comas
+    estudios_texto = db.Column(db.Text, nullable=False)
     estado = db.Column(db.String(50), default="Pendiente")
 
 with app.app_context():
@@ -768,7 +791,6 @@ def index():
     estudios_lab = EstudioLabModel.query.filter_by(id_paciente=paciente_actual.id).all() if paciente_actual else []
     biomarcadores_paciente = BiomarcadorModel.query.filter_by(id_paciente=paciente_actual.id).all() if paciente_actual else []
     
-    # === AQUI ESTA LA PRIMERA REPARACION: CONSULTAR ESTUDIOS SOLICITADOS ===
     estudios_solicitados = EstudioSolicitadoModel.query.filter_by(id_paciente=paciente_actual.id).order_by(EstudioSolicitadoModel.id.desc()).all() if paciente_actual else []
     
     recetas_db = RecetaModel.query.all()
@@ -801,7 +823,7 @@ def index():
         estudios_no_lab=estudios_no_lab,
         estudios_lab=estudios_lab,
         biomarcadores=biomarcadores_paciente,
-        estudios_solicitados=estudios_solicitados, # Enviamos la lista al frontend
+        estudios_solicitados=estudios_solicitados,
         recetas_db=recetas_db,
         recetas_paciente_actual=recetas_paciente_actual,
         protocolo_reg=protocolo_reg,
@@ -876,7 +898,6 @@ def portal_preconsulta_guardar_por_token(token_portal):
         paciente.pre_consulta_json = json.dumps(data_completa)
         paciente.compromiso = request.form.get('compromiso', 'Pendiente')
 
-        # Captura y almacenamiento automático de todo el bloque de salud y wearables enviado desde el portal móvil
         datos_wearable_str = request.form.get('datos_wearable_json', '')
         if datos_wearable_str:
             proto = ProtocoloWearablesModel.query.filter_by(id_paciente=paciente.id).first()
@@ -898,16 +919,13 @@ def agendar_paciente():
     medico = request.form.get('medico', 'Dr. Pedro Calabrese')
     hora_turno = request.form.get('hora_turno', '09:00 hs')
     
-    # 1. Buscar si el paciente ya existe en la base de datos
     paciente_existente = PacienteModel.query.filter_by(nombre=nombre).first()
     
     if paciente_existente:
-        # Si existe, reutilizamos su ficha y lo pasamos a la agenda del médico seleccionado
         paciente_existente.medico = medico
         paciente_existente.hora_turno = hora_turno
         paciente_existente.estado_turno = "Confirmado / Sala VIP"
     else:
-        # Si no existe, creamos una ficha nueva
         nuevo_id = f"p_{random.randint(1000, 9999)}"
         nuevo_paciente = PacienteModel(
             id=nuevo_id,
@@ -987,7 +1005,7 @@ def subir_foto_evolucion():
     try:
         token = request.args.get('token')
         id_paciente = request.form.get('id_paciente')
-        tipo = request.form.get('tipo') # 'antes' o 'despues'
+        tipo = request.form.get('tipo')
         archivo = request.files.get('foto')
         
         if archivo and id_paciente:
@@ -1346,7 +1364,6 @@ def imprimir_receta(id_paciente):
     db.session.add(nueva_receta)
     db.session.commit()
     
-    # Aquí pasamos p.receta_texto formateado
     texto_receta_html = p.receta_texto.replace('\n', '<br>')
     
     return render_template('receta_membretada.html', 
@@ -1368,8 +1385,6 @@ def validar_receta(id_receta):
 
     return render_template('validar_receta.html', receta=receta)
 
-
-# === AQUI ESTA LA SEGUNDA REPARACION: CARGA INTELIGENTE MEJORADA ===
 @app.route('/api/medico/carga-inteligente-lab', methods=['POST'])
 def carga_inteligente_lab():
     token = request.args.get('token') or request.form.get('token')
@@ -1418,18 +1433,8 @@ def carga_inteligente_lab():
                     {
                         "role": "user",
                         "content": [
-                            {
-                                "type": "document",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "application/pdf",
-                                    "data": pdf_data
-                                }
-                            },
-                            {
-                                "type": "text",
-                                "text": "Extrae los resultados. Asegúrate de cerrar con el bloque ```json."
-                            }
+                            {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": pdf_data}},
+                            {"type": "text", "text": "Extrae los resultados. Asegúrate de cerrar con el bloque ```json."}
                         ]
                     }
                 ]
@@ -1452,18 +1457,8 @@ def carga_inteligente_lab():
                     {
                         "role": "user",
                         "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": media_type,
-                                    "data": image_data
-                                }
-                            },
-                            {
-                                "type": "text",
-                                "text": "Extrae los resultados. Asegúrate de cerrar con el bloque ```json."
-                            }
+                            {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_data}},
+                            {"type": "text", "text": "Extrae los resultados. Asegúrate de cerrar con el bloque ```json."}
                         ]
                     }
                 ]
@@ -1471,8 +1466,6 @@ def carga_inteligente_lab():
 
         dictamen_ia = "".join(b.text for b in response.content if b.type == "text")
         
-        # ELIMINAMOS EL BLOQUE JSON DEL TEXTO QUE VERÁ EL MÉDICO
-        import re
         dictamen_visual = re.sub(r'```json\s*.*?\s*```', '', dictamen_ia, flags=re.DOTALL).strip()
 
     except Exception as e:
@@ -1484,16 +1477,15 @@ def carga_inteligente_lab():
             id_paciente=id_paciente,
             fecha=datetime.date.today().strftime('%d/%m/%Y'),
             titulo=f"Lab Móvil / WhatsApp: {archivo.filename}",
-            dictamen=dictamen_visual, # Se guarda el texto limpio
+            dictamen=dictamen_visual,
             origen=archivo.filename,
             medico="Motor Inteligente",
             estado="Completado"
         )
         db.session.add(nuevo_estudio)
-        db.session.commit() # Guardamos primero el estudio para asegurar persistencia
+        db.session.commit()
 
         try:
-            # Extracción segura de JSON usando Expresiones Regulares
             match = re.search(r'```json\s*(.*?)\s*```', dictamen_ia, re.DOTALL)
             if match:
                 json_str = match.group(1).strip()
@@ -1506,7 +1498,6 @@ def carga_inteligente_lab():
                     unidad_val = bio.get("unidad", "mg/dL")
                     
                     if param_val is not None and val_num is not None:
-                        # Limpiar caracteres raros en el numero por si acaso
                         try:
                             clean_val = float(str(val_num).replace(',', '.'))
                             nuevo_bio = BiomarcadorModel(
@@ -1518,7 +1509,7 @@ def carga_inteligente_lab():
                             )
                             db.session.add(nuevo_bio)
                         except ValueError:
-                            pass # Si no es un numero válido, se omite este biomarcador
+                            pass
 
                 db.session.commit()
         except Exception as json_err:
@@ -1528,7 +1519,6 @@ def carga_inteligente_lab():
         print("Error general guardando el laboratorio:", str(e2))
 
     return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
-
 
 @app.route('/api/medico/editar-examen-lab/<int:id_estudio>', methods=['POST'])
 def editar_examen_lab(id_estudio):
@@ -1545,7 +1535,6 @@ def editar_examen_lab(id_estudio):
 
     return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
 
-# === AQUI ESTA LA TERCERA REPARACION: GUARDAR ESTUDIOS SOLICITADOS EN BD ===
 @app.route('/api/medico/generar-orden-lab', methods=['POST'])
 def generar_orden_lab():
     token = request.args.get('token')
@@ -1564,13 +1553,11 @@ def generar_orden_lab():
     if not estudios_seleccionados:
         return "No se seleccionó ningún estudio.", 400
         
-    # Formatear la lista para el PDF
     texto_orden = "<b>SOLICITUD DE EXÁMENES LABORATORIALES:</b><br><br>"
     for i, est in enumerate(estudios_seleccionados, 1):
         texto_orden += f"{i}. {est}<br>"
     texto_orden += "<br><b>Motivo / Diagnóstico:</b> Control Clínico y Mapeo Metabólico Aeterna."
     
-    # NUEVO: Guardar en la Base de Datos para que aparezca en la lista de la derecha
     estudios_texto_plano = ", ".join(estudios_seleccionados)
     nueva_orden = EstudioSolicitadoModel(
         id_paciente=id_paciente,
@@ -1582,7 +1569,6 @@ def generar_orden_lab():
     db.session.add(nueva_orden)
     db.session.commit()
     
-    # Generar QR
     id_orden = str(uuid.uuid4())
     url_validacion = f"{request.host_url}validar/{id_orden}"
     qr = qrcode.QRCode(box_size=5, border=3)
@@ -1600,4 +1586,6 @@ def generar_orden_lab():
                            texto_imprimir=texto_orden)
 
 if __name__ == '__main__':
+    valido, mensaje = validar_certificado_pfx()
+    print(f"Estado Sifen: {mensaje}")
     app.run(host='0.0.0.0', debug=True, port=5000)
