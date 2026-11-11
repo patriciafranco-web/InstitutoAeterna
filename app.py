@@ -21,41 +21,47 @@ import uuid
 # Librerías para Facturación Electrónica Sifen (.pfx)
 from cryptography.hazmat.primitives.serialization import pkcs12
 
-# Rutas de búsqueda seguras para el certificado .pfx en Render o entorno local
-POSIBLES_RUTAS_PFX = [
-    os.getenv('SIFEN_CERT_PATH', ''),
-    '/etc/secrets/certificado.pfx',
-    'certificado.pfx',
-    os.path.join(os.path.dirname(__file__), 'certificado.pfx')
-]
-
 SIFEN_CERT_PASS = os.getenv('SIFEN_CERT_PASS', '')
 
-def extraer_texto(response):
-    return "".join(b.text for b in response.content if b.type == "text")
+def cargar_certificado():
+    """Carga de forma segura el certificado .pfx codificado en Base64 desde Render o local"""
+    rutas_b64 = [
+        '/etc/secrets/certificado.b64',
+        'certificado.b64',
+        os.path.join(os.path.dirname(__file__), 'certificado.b64')
+    ]
+    
+    archivo_encontrado = None
+    for r in rutas_b64:
+        if r and os.path.exists(r):
+            archivo_encontrado = r
+            break
+            
+    if not archivo_encontrado:
+        # Respaldo si estuviera como .pfx directo binario
+        if os.path.exists('/etc/secrets/certificado.pfx'):
+            with open('/etc/secrets/certificado.pfx', 'rb') as f:
+                datos_bin = f.read()
+            password = SIFEN_CERT_PASS.strip().encode() if SIFEN_CERT_PASS else b''
+            return pkcs12.load_key_and_certificates(datos_bin, password)
+        elif os.path.exists('certificado.pfx'):
+            with open('certificado.pfx', 'rb') as f:
+                datos_bin = f.read()
+            password = SIFEN_CERT_PASS.strip().encode() if SIFEN_CERT_PASS else b''
+            return pkcs12.load_key_and_certificates(datos_bin, password)
+        raise FileNotFoundError("No se encontró el archivo certificado.b64 ni certificado.pfx en el servidor.")
+
+    with open(archivo_encontrado, "r") as f:
+        contenido = f.read().strip()
+        
+    datos = base64.b64decode(contenido)
+    password = SIFEN_CERT_PASS.strip().encode() if SIFEN_CERT_PASS else b''
+    return pkcs12.load_key_and_certificates(datos, password)
 
 def validar_certificado_pfx():
-    """Valida de forma segura que el archivo .pfx exista y se pueda desencriptar"""
-    ruta_valida = None
-    for ruta in POSIBLES_RUTAS_PFX:
-        if ruta and os.path.exists(ruta):
-            ruta_valida = ruta
-            break
-
-    if not ruta_valida:
-        return False, "El archivo del certificado (.pfx) no se encuentra en las rutas del servidor."
-        
+    """Valida de forma segura el certificado cargado"""
     try:
-        with open(ruta_valida, "rb") as f:
-            pfx_data = f.read()
-            
-        if len(pfx_data) < 50:
-            return False, "El archivo .pfx está vacío o corrupto."
-
-        private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
-            pfx_data, SIFEN_CERT_PASS.encode('utf-8') if SIFEN_CERT_PASS else b''
-        )
-        
+        private_key, certificate, additional_certificates = cargar_certificado()
         subject = certificate.subject.rfc4514_string() if certificate else "Certificado Válido"
         return True, f"Certificado digital Sifen cargado y verificado correctamente."
     except Exception as e:
