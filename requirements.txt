@@ -7,3 +7,4 @@ qrcode==7.4.2
 Pillow
 python-dotenv==1.0.1
 anthropic
+cryptography
