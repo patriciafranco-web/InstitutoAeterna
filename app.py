@@ -1392,14 +1392,16 @@ def carga_inteligente_lab():
 
         system_prompt = (
             "Eres un médico experto y asistente de laboratorio clínico del Instituto Aeterna. "
-            "Tu tarea es analizar la imagen o PDF adjunto y extraer los resultados laboratoriales. "
-            "Primero, escribe un breve resumen clínico de 2 líneas sobre los hallazgos principales.\n\n"
-            "IMPORTANTE: Al final de tu respuesta, DEBES incluir un bloque JSON exacto y limpio. "
-            "NO incluyas texto explicativo después del JSON. Usa exactamente este formato:\n\n"
+            "Tu tarea es analizar el PDF o imagen y transcribir los resultados exactamente como un reporte de laboratorio.\n\n"
+            "INSTRUCCIONES PARA EL TEXTO:\n"
+            "1. Inicia con 'RESUMEN CLÍNICO:' y escribe 2-3 líneas de hallazgos.\n"
+            "2. Agrega una sección 'VALORES EXTRAÍDOS:' y haz una lista completa de TODOS los parámetros detectados, "
+            "mostrando: Parámetro | Valor | Unidad.\n\n"
+            "IMPORTANTE: Al final de toda tu respuesta, incluye un bloque de código JSON estrictamente válido "
+            "con los datos para el sistema. NO escribas texto después del JSON. Formato exacto:\n"
             "```json\n"
             "[\n"
-            "  {\"parametro\": \"Glucemia en ayunas\", \"valor\": 92.0, \"unidad\": \"mg/dL\"},\n"
-            "  {\"parametro\": \"Colesterol Total\", \"valor\": 180.0, \"unidad\": \"mg/dL\"}\n"
+            "  {\"parametro\": \"Glucemia en ayunas\", \"valor\": 92.0, \"unidad\": \"mg/dL\"}\n"
             "]\n"
             "```"
         )
@@ -1468,16 +1470,21 @@ def carga_inteligente_lab():
             )
 
         dictamen_ia = "".join(b.text for b in response.content if b.type == "text")
+        
+        # ELIMINAMOS EL BLOQUE JSON DEL TEXTO QUE VERÁ EL MÉDICO
+        import re
+        dictamen_visual = re.sub(r'```json\s*.*?\s*```', '', dictamen_ia, flags=re.DOTALL).strip()
 
     except Exception as e:
-        dictamen_ia = f"❌ ERROR DE PROCESAMIENTO:\n\nLa IA no pudo procesar el archivo.\n\nMotivo: {str(e)}"
+        dictamen_visual = f"❌ ERROR DE PROCESAMIENTO:\n\nLa IA no pudo procesar el archivo.\n\nMotivo: {str(e)}"
+        dictamen_ia = ""
 
     try:
         nuevo_estudio = EstudioLabModel(
             id_paciente=id_paciente,
             fecha=datetime.date.today().strftime('%d/%m/%Y'),
             titulo=f"Lab Móvil / WhatsApp: {archivo.filename}",
-            dictamen=dictamen_ia,
+            dictamen=dictamen_visual, # Se guarda el texto limpio
             origen=archivo.filename,
             medico="Motor Inteligente",
             estado="Completado"
