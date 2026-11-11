@@ -10,6 +10,7 @@ import json
 import datetime
 import time
 import anthropic
+import re # Agregado para extraccion segura de JSON
 
 # Librerías para la Receta Electrónica (QR y UUID)
 import qrcode
@@ -174,6 +175,16 @@ class TareaEquipoModel(db.Model):
     profesional_destinatario = db.Column(db.String(150), nullable=False)
     mensaje_tarea = db.Column(db.Text, nullable=False)
     fecha = db.Column(db.String(50), default=datetime.date.today().strftime('%d/%m/%Y'))
+    estado = db.Column(db.String(50), default="Pendiente")
+
+# NUEVO MODELO PARA ESTUDIOS SOLICITADOS
+class EstudioSolicitadoModel(db.Model):
+    __tablename__ = 'estudios_solicitados'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    id_paciente = db.Column(db.String(50), nullable=False)
+    fecha = db.Column(db.String(50), nullable=False)
+    medico = db.Column(db.String(150), nullable=False)
+    estudios_texto = db.Column(db.Text, nullable=False) # Guardará la lista separada por comas
     estado = db.Column(db.String(50), default="Pendiente")
 
 with app.app_context():
@@ -757,6 +768,9 @@ def index():
     estudios_lab = EstudioLabModel.query.filter_by(id_paciente=paciente_actual.id).all() if paciente_actual else []
     biomarcadores_paciente = BiomarcadorModel.query.filter_by(id_paciente=paciente_actual.id).all() if paciente_actual else []
     
+    # === AQUI ESTA LA PRIMERA REPARACION: CONSULTAR ESTUDIOS SOLICITADOS ===
+    estudios_solicitados = EstudioSolicitadoModel.query.filter_by(id_paciente=paciente_actual.id).order_by(EstudioSolicitadoModel.id.desc()).all() if paciente_actual else []
+    
     recetas_db = RecetaModel.query.all()
     recetas_paciente_actual = RecetaModel.query.filter_by(id_paciente=paciente_actual.id).all() if paciente_actual else []
     
@@ -787,6 +801,7 @@ def index():
         estudios_no_lab=estudios_no_lab,
         estudios_lab=estudios_lab,
         biomarcadores=biomarcadores_paciente,
+        estudios_solicitados=estudios_solicitados, # Enviamos la lista al frontend
         recetas_db=recetas_db,
         recetas_paciente_actual=recetas_paciente_actual,
         protocolo_reg=protocolo_reg,
@@ -874,7 +889,6 @@ def portal_preconsulta_guardar_por_token(token_portal):
         db.session.commit()
     return render_template_string(PORTAL_GRACIAS_TEMPLATE)
 
-# SE ACTUALIZÓ ESTA FUNCIÓN PARA NO DUPLICAR PACIENTES AL AGENDAR
 @app.route('/api/admision/agendar-paciente', methods=['POST'])
 def agendar_paciente():
     token = request.args.get('token')
@@ -1354,6 +1368,8 @@ def validar_receta(id_receta):
 
     return render_template('validar_receta.html', receta=receta)
 
+
+# === AQUI ESTA LA SEGUNDA REPARACION: CARGA INTELIGENTE MEJORADA ===
 @app.route('/api/medico/carga-inteligente-lab', methods=['POST'])
 def carga_inteligente_lab():
     token = request.args.get('token') or request.form.get('token')
@@ -1375,10 +1391,11 @@ def carga_inteligente_lab():
         extension = filename.lower().split('.')[-1]
 
         system_prompt = (
-            "Eres un médico experto y asistente de laboratorio clínico. "
-            "Analiza el documento o imagen adjunta de resultados de laboratorio y redacta un resumen clínico estructurado. "
-            "IMPORTANTE: Al final de tu respuesta, DEBES incluir obligatoriamente un bloque de código JSON válido que contenga todos los biomarcadores numéricos encontrados, "
-            "siguiendo estrictamente este formato exacto:\n\n"
+            "Eres un médico experto y asistente de laboratorio clínico del Instituto Aeterna. "
+            "Tu tarea es analizar la imagen o PDF adjunto y extraer los resultados laboratoriales. "
+            "Primero, escribe un breve resumen clínico de 2 líneas sobre los hallazgos principales.\n\n"
+            "IMPORTANTE: Al final de tu respuesta, DEBES incluir un bloque JSON exacto y limpio. "
+            "NO incluyas texto explicativo después del JSON. Usa exactamente este formato:\n\n"
             "```json\n"
             "[\n"
             "  {\"parametro\": \"Glucemia en ayunas\", \"valor\": 92.0, \"unidad\": \"mg/dL\"},\n"
@@ -1409,7 +1426,7 @@ def carga_inteligente_lab():
                             },
                             {
                                 "type": "text",
-                                "text": "Extrae los resultados de este laboratorio y asegúrate de generar el bloque JSON al final."
+                                "text": "Extrae los resultados. Asegúrate de cerrar con el bloque ```json."
                             }
                         ]
                     }
@@ -1443,7 +1460,7 @@ def carga_inteligente_lab():
                             },
                             {
                                 "type": "text",
-                                "text": "Extrae los resultados de este análisis y asegúrate de generar el bloque JSON al final."
+                                "text": "Extrae los resultados. Asegúrate de cerrar con el bloque ```json."
                             }
                         ]
                     }
@@ -1453,7 +1470,7 @@ def carga_inteligente_lab():
         dictamen_ia = "".join(b.text for b in response.content if b.type == "text")
 
     except Exception as e:
-        dictamen_ia = f"❌ ERROR DE PROCESAMIENTO:\n\nLa IA no pudo procesar el archivo adjunto.\n\nMotivo: {str(e)}"
+        dictamen_ia = f"❌ ERROR DE PROCESAMIENTO:\n\nLa IA no pudo procesar el archivo.\n\nMotivo: {str(e)}"
 
     try:
         nuevo_estudio = EstudioLabModel(
@@ -1466,10 +1483,13 @@ def carga_inteligente_lab():
             estado="Completado"
         )
         db.session.add(nuevo_estudio)
+        db.session.commit() # Guardamos primero el estudio para asegurar persistencia
 
         try:
-            if "```json" in dictamen_ia:
-                json_str = dictamen_ia.split("```json")[1].split("```")[0].strip()
+            # Extracción segura de JSON usando Expresiones Regulares
+            match = re.search(r'```json\s*(.*?)\s*```', dictamen_ia, re.DOTALL)
+            if match:
+                json_str = match.group(1).strip()
                 biomarcadores_lista = json.loads(json_str)
                 fecha_hoy = datetime.date.today().strftime('%d/%m/%Y')
                 
@@ -1479,22 +1499,29 @@ def carga_inteligente_lab():
                     unidad_val = bio.get("unidad", "mg/dL")
                     
                     if param_val is not None and val_num is not None:
-                        nuevo_bio = BiomarcadorModel(
-                            id_paciente=id_paciente,
-                            fecha=fecha_hoy,
-                            parametro=str(param_val).strip(),
-                            valor=float(val_num),
-                            unidad=str(unidad_val).strip()
-                        )
-                        db.session.add(nuevo_bio)
-        except Exception as json_err:
-            print("Error al parsear o guardar los biomarcadores en la BD:", str(json_err))
+                        # Limpiar caracteres raros en el numero por si acaso
+                        try:
+                            clean_val = float(str(val_num).replace(',', '.'))
+                            nuevo_bio = BiomarcadorModel(
+                                id_paciente=id_paciente,
+                                fecha=fecha_hoy,
+                                parametro=str(param_val).strip(),
+                                valor=clean_val,
+                                unidad=str(unidad_val).strip()
+                            )
+                            db.session.add(nuevo_bio)
+                        except ValueError:
+                            pass # Si no es un numero válido, se omite este biomarcador
 
-        db.session.commit()
+                db.session.commit()
+        except Exception as json_err:
+            print("Error al extraer JSON de la IA:", str(json_err))
+
     except Exception as e2:
-        print("Error general en base de datos:", str(e2))
+        print("Error general guardando el laboratorio:", str(e2))
 
     return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
+
 
 @app.route('/api/medico/editar-examen-lab/<int:id_estudio>', methods=['POST'])
 def editar_examen_lab(id_estudio):
@@ -1511,6 +1538,7 @@ def editar_examen_lab(id_estudio):
 
     return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
 
+# === AQUI ESTA LA TERCERA REPARACION: GUARDAR ESTUDIOS SOLICITADOS EN BD ===
 @app.route('/api/medico/generar-orden-lab', methods=['POST'])
 def generar_orden_lab():
     token = request.args.get('token')
@@ -1529,12 +1557,23 @@ def generar_orden_lab():
     if not estudios_seleccionados:
         return "No se seleccionó ningún estudio.", 400
         
-    # Formatear la lista con saltos de línea HTML (<br>) para que se vea bien en el PDF
+    # Formatear la lista para el PDF
     texto_orden = "<b>SOLICITUD DE EXÁMENES LABORATORIALES:</b><br><br>"
     for i, est in enumerate(estudios_seleccionados, 1):
         texto_orden += f"{i}. {est}<br>"
-        
     texto_orden += "<br><b>Motivo / Diagnóstico:</b> Control Clínico y Mapeo Metabólico Aeterna."
+    
+    # NUEVO: Guardar en la Base de Datos para que aparezca en la lista de la derecha
+    estudios_texto_plano = ", ".join(estudios_seleccionados)
+    nueva_orden = EstudioSolicitadoModel(
+        id_paciente=id_paciente,
+        fecha=datetime.date.today().strftime('%d/%m/%Y'),
+        medico=nombre_medico,
+        estudios_texto=estudios_texto_plano,
+        estado="Impreso"
+    )
+    db.session.add(nueva_orden)
+    db.session.commit()
     
     # Generar QR
     id_orden = str(uuid.uuid4())
@@ -1547,7 +1586,6 @@ def generar_orden_lab():
     img_qr.save(buffer, format="PNG")
     qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
     
-    # Pasamos el texto_orden como una variable directa a la plantilla
     return render_template('receta_membretada.html', 
                            p=p, 
                            nombre_usuario=nombre_medico,
