@@ -207,11 +207,59 @@
                     <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
                         <div>
                             <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: bold;">Estado del Timbrado Sifen</span>
-                            <div style="font-size: 14px; font-weight: bold; color: var(--accent); margin-top: 8px;">Aprobado y Conectado</div>
+                            <div style="font-size: 14px; font-weight: bold; color: var(--accent); margin-top: 8px;">Aprobado y Conectado (.pfx Activo)</div>
                         </div>
                         <span style="font-size: 28px;">🟢</span>
                     </div>
                 </div>
+
+                <!-- Formulario interactivo para probar el cobro y previsualización Sifen -->
+                <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                    <h4 style="color: var(--accent); margin-top: 0; font-size: 13px; text-transform: uppercase;">Registrar Servicio, Monto y Emitir Sifen</h4>
+                    <form action="/api/caja/registrar-pago?token={{ token }}" method="POST" style="display: grid; grid-template-columns: 2fr 2fr 1fr 1fr 1fr; gap: 10px; align-items: end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 10.5px;">Paciente / Cliente:</label>
+                            <input type="text" name="paciente" class="form-control" placeholder="Nombre y Apellido" required style="font-size: 12px; padding: 8px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 10.5px;">Concepto / Servicio:</label>
+                            <input type="text" name="concepto" class="form-control" placeholder="Ej. Sueroterapia NAD+ / Consulta" required style="font-size: 12px; padding: 8px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 10.5px;">Monto (Gs.):</label>
+                            <input type="number" name="monto" class="form-control" placeholder="350000" required style="font-size: 12px; padding: 8px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 10.5px;">Pago:</label>
+                            <select name="metodo" class="form-control" style="font-size: 12px; padding: 8px;">
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Tarjeta POS">POS</option>
+                                <option value="Transferencia">Transf.</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn" style="background: var(--success); font-size: 11px; padding: 9px 12px; height: 37px;">🧾 Emitir Sifen</button>
+                    </form>
+                </div>
+
+                <!-- Listado de transacciones y CDC generados -->
+                <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin-bottom: 10px;">Comprobantes Electrónicos Emitidos Hoy</h4>
+                <table>
+                    <tr><th>Fecha</th><th>Paciente / RUC</th><th>Monto</th><th>Método</th><th>Estado Sifen</th><th>CDC (Código de Control)</th></tr>
+                    {% if pagos %}
+                        {% for pago in pagos %}
+                        <tr>
+                            <td>{{ pago.fecha }}</td>
+                            <td><b>{{ pago.paciente }}</b></td>
+                            <td>₲ {{ "{:,.0f}".format(pago.monto) }}</td>
+                            <td>{{ pago.metodo }}</td>
+                            <td><span style="color: var(--success); font-weight: bold;">{{ pago.sifen_status }}</span></td>
+                            <td><code style="font-size: 10px; background: var(--bg-main); padding: 4px; border-radius: 4px; color: var(--accent);">{{ pago.cdc }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 20px;">No hay facturas electrónicas emitidas todavía. Realiza una prueba arriba.</td></tr>
+                    {% endif %}
+                </table>
             </div>
 
         {% elif seccion == 'agenda_medico' %}
@@ -1104,7 +1152,7 @@
             contadorSesiones++;
             const tbody = document.getElementById('sesiones-tbody');
             const numStr = contadorSesiones < 10 ? '0' + contadorSesiones : contadorSesiones;
-              
+            
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="padding: 8px; vertical-align: top;"><b>Sesión ${numStr}</b><input type="hidden" name="sesion_${contadorSesiones}" value="Sesión ${numStr}"></td>
@@ -1160,7 +1208,7 @@
                             body: JSON.stringify({ texto: textoDictado })
                         });
                         const data = await res.json();
-                          
+                        
                         if (data.status === 'success') {
                             textarea.value += (textarea.value ? '\n\n' : '') + data.soap;
                             ajustarAlturaSoap(textarea);
