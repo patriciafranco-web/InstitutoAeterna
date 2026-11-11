@@ -731,6 +731,7 @@ def index():
         
     id_paciente = request.args.get('id')
     
+    # LA AGENDA SIGUE PRIVADA PARA CADA MÉDICO
     if rol == 'medico':
         pacientes_db = PacienteModel.query.filter_by(medico=nombre_usuario).all()
     else:
@@ -873,27 +874,38 @@ def portal_preconsulta_guardar_por_token(token_portal):
         db.session.commit()
     return render_template_string(PORTAL_GRACIAS_TEMPLATE)
 
+# SE ACTUALIZÓ ESTA FUNCIÓN PARA NO DUPLICAR PACIENTES AL AGENDAR
 @app.route('/api/admision/agendar-paciente', methods=['POST'])
 def agendar_paciente():
     token = request.args.get('token')
-    nombre = request.form.get('nombre', '')
+    nombre = request.form.get('nombre', '').strip()
     edad = int(request.form.get('edad', 30))
     programa = request.form.get('programa', 'Longevidad')
     medico = request.form.get('medico', 'Dr. Pedro Calabrese')
     hora_turno = request.form.get('hora_turno', '09:00 hs')
     
-    nuevo_id = f"p_{random.randint(1000, 9999)}"
+    # 1. Buscar si el paciente ya existe en la base de datos
+    paciente_existente = PacienteModel.query.filter_by(nombre=nombre).first()
     
-    nuevo_paciente = PacienteModel(
-        id=nuevo_id,
-        nombre=nombre,
-        edad=edad,
-        programa=programa,
-        medico=medico,
-        hora_turno=hora_turno,
-        estado_turno="Confirmado / Sala VIP"
-    )
-    db.session.add(nuevo_paciente)
+    if paciente_existente:
+        # Si existe, reutilizamos su ficha y lo pasamos a la agenda del médico seleccionado
+        paciente_existente.medico = medico
+        paciente_existente.hora_turno = hora_turno
+        paciente_existente.estado_turno = "Confirmado / Sala VIP"
+    else:
+        # Si no existe, creamos una ficha nueva
+        nuevo_id = f"p_{random.randint(1000, 9999)}"
+        nuevo_paciente = PacienteModel(
+            id=nuevo_id,
+            nombre=nombre,
+            edad=edad,
+            programa=programa,
+            medico=medico,
+            hora_turno=hora_turno,
+            estado_turno="Confirmado / Sala VIP"
+        )
+        db.session.add(nuevo_paciente)
+        
     db.session.commit()
     
     return redirect(url_for('index', token=token, rol='recepcion', seccion='agenda_admision'))
