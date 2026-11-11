@@ -166,14 +166,6 @@
                     </div>
                     <div class="form-group"><label>Hora del Turno:</label><input type="text" name="hora_turno" class="form-control" required placeholder="09:00 hs"></div>
                     <div class="form-group">
-                        <label>Programa Clínico:</label>
-                        <select name="programa" class="form-control">
-                            <option value="Longevidad & Optimización Metabólica">Longevidad & Optimización Metabólica</option>
-                            <option value="Bienestar & Rendimiento Cognitivo">Bienestar & Rendimiento Cognitivo</option>
-                            <option value="Optimización Cardiovascular">Optimización Cardiovascular</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
                         <label>Médico Tratante:</label>
                         <select name="medico" class="form-control">
                             <option value="Dr. Pedro Calabrese">Dr. Pedro Calabrese (Traumatología)</option>
@@ -422,10 +414,10 @@
                         <label style="font-size: 11.5px; font-weight: bold; color: var(--text-secondary); margin-bottom: 6px; display: block;">Nota de Evolución / Dictado Clínico:</label>
                         <!-- Textarea con expansión amplia al hacer clic (380px) y auto-crecimiento -->
                         <textarea id="soap_input" class="form-control" placeholder="Escriba la evolución clínica (S-O-A-P) o dicte por voz..." 
-                                  style="height: 140px; min-height: 140px; transition: height 0.2s ease; resize: vertical; overflow-y: hidden;" 
-                                  onfocus="expandirSoapMax(this)" 
-                                  oninput="ajustarAlturaSoap(this)"
-                                  onblur="contraerSoapSiVacio(this)"></textarea>
+                                style="height: 140px; min-height: 140px; transition: height 0.2s ease; resize: vertical; overflow-y: hidden;" 
+                                onfocus="expandirSoapMax(this)" 
+                                oninput="ajustarAlturaSoap(this)"
+                                onblur="contraerSoapSiVacio(this)"></textarea>
                     </div>
 
                     <div style="display: flex; justify-content: flex-end; margin-top: 15px;">
