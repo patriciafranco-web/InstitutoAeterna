@@ -982,7 +982,8 @@
 
         function guardarNotaLibre(id) {
             const nota = document.getElementById('nota_libre_input').value;
-            fetch('/api/medico/guardar-nota-libre', {
+            // AQUI ESTA EL CAMBIO: agregamos ?token={{ token }}
+            fetch('/api/medico/guardar-nota-libre?token={{ token }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id_paciente: id, nota: nota })
@@ -998,7 +999,8 @@
                 return;
             }
 
-            fetch('/api/medico/guardar-evolucion-soap', {
+            // AQUI ESTA EL CAMBIO: agregamos ?token={{ token }}
+            fetch('/api/medico/guardar-evolucion-soap?token={{ token }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id_paciente: idPaciente, nota: nota })
@@ -1056,7 +1058,8 @@
             input.value = '';
             chatBody.scrollTop = chatBody.scrollHeight;
 
-            fetch('/api/medico/asistente-ia', {
+            // AQUI ESTA EL CAMBIO: agregamos ?token={{ token }}
+            fetch('/api/medico/asistente-ia?token={{ token }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
