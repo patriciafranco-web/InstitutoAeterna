@@ -722,7 +722,7 @@ def login():
                 
                 rol_destino = user_info['rol_base']
                 if rol_destino == 'recepcion' or rol_destino == 'secretaria':
-                    seccion_dest = 'agenda_admision' if rol_destino == 'recepcion' else 'caja'
+                    seccion_dest = 'caja' # Habilitamos caja directamente también para recepción
                 elif rol_destino == 'admision':
                     seccion_dest = 'agenda_admision'
                 else:
@@ -758,7 +758,7 @@ def index():
     
     if rol_base == 'recepcion' or rol_base == 'admision':
         rol = 'recepcion'
-        seccion = request.args.get('seccion', 'agenda_admision')
+        seccion = request.args.get('seccion', 'caja') # Permitir por defecto o según se elija
     else:
         seccion = request.args.get('seccion', 'agenda_medico' if rol == 'medico' else 'caja')
         
