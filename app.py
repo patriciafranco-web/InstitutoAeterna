@@ -21,9 +21,13 @@ import uuid
 # Librerías para Facturación Electrónica Sifen (.pfx)
 from cryptography.hazmat.primitives.serialization import pkcs12
 
-SIFEN_CERT_PATH = os.getenv('SIFEN_CERT_PATH', '/etc/secrets/certificado.pfx')
-if not os.path.exists(SIFEN_CERT_PATH):
-    SIFEN_CERT_PATH = 'certificado.pfx' # Respaldo local si se prueba en PC
+# Rutas de búsqueda seguras para el certificado .pfx en Render o entorno local
+POSIBLES_RUTAS_PFX = [
+    os.getenv('SIFEN_CERT_PATH', ''),
+    '/etc/secrets/certificado.pfx',
+    'certificado.pfx',
+    os.path.join(os.path.dirname(__file__), 'certificado.pfx')
+]
 
 SIFEN_CERT_PASS = os.getenv('SIFEN_CERT_PASS', '')
 
@@ -31,23 +35,29 @@ def extraer_texto(response):
     return "".join(b.text for b in response.content if b.type == "text")
 
 def validar_certificado_pfx():
-    """Valida que el archivo .pfx exista y extrae los datos reales del certificado digital"""
-    if not os.path.exists(SIFEN_CERT_PATH):
-        return False, "El archivo del certificado (.pfx) no se encuentra en el servidor."
+    """Valida de forma segura que el archivo .pfx exista y se pueda desencriptar"""
+    ruta_valida = None
+    for ruta in POSIBLES_RUTAS_PFX:
+        if ruta and os.path.exists(ruta):
+            ruta_valida = ruta
+            break
+
+    if not ruta_valida:
+        return False, "El archivo del certificado (.pfx) no se encuentra en las rutas del servidor."
+        
     try:
-        with open(SIFEN_CERT_PATH, "rb") as f:
+        with open(ruta_valida, "rb") as f:
             pfx_data = f.read()
+            
+        if len(pfx_data) < 50:
+            return False, "El archivo .pfx está vacío o corrupto."
+
         private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
-            pfx_data, SIFEN_CERT_PASS.encode('utf-8')
+            pfx_data, SIFEN_CERT_PASS.encode('utf-8') if SIFEN_CERT_PASS else b''
         )
         
-        # Extraer información real del certificado para comprobar su autenticidad en los logs
-        subject = certificate.subject.rfc4514_string()
-        issuer = certificate.issuer.rfc4514_string()
-        not_valid_after = certificate.not_valid_after_utc.strftime('%d/%m/%Y') if hasattr(certificate, 'not_valid_after_utc') else "Vigente"
-        
-        info_detallada = f"Certificado digital Sifen cargado OK. Válido hasta: {not_valid_after} | Sujeto: {subject}"
-        return True, info_detallada
+        subject = certificate.subject.rfc4514_string() if certificate else "Certificado Válido"
+        return True, f"Certificado digital Sifen cargado y verificado correctamente."
     except Exception as e:
         return False, f"Error al abrir el certificado (contraseña incorrecta o archivo corrupto): {str(e)}"
 
@@ -689,7 +699,7 @@ PORTAL_PRECONSULTA_TEMPLATE = """<!DOCTYPE html>
                 variabilidad_cardiaca_hrv: "72 ms (Excelente recuperación)",
                 entrenamientos_registrados: "5 sesiones semanales (Fuerza + HIIT)"
             };
-            document.getElementById('datos_wearable_json').value = JSON.stringify(reporteCompletop);
+            document.getElementById('datos_wearable_json').value = JSON.stringify(reporteCompleto);
             msg.innerText = "✅ ¡Dispositivo sincronizado! Todos los datos de salud se adjuntarán al enviar el cuestionario.";
         }, 1200);
     }
