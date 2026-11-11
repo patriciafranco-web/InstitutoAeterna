@@ -31,7 +31,7 @@ def extraer_texto(response):
     return "".join(b.text for b in response.content if b.type == "text")
 
 def validar_certificado_pfx():
-    """Valida que el archivo .pfx exista y que la contraseña sea correcta"""
+    """Valida que el archivo .pfx exista y extrae los datos reales del certificado digital"""
     if not os.path.exists(SIFEN_CERT_PATH):
         return False, "El archivo del certificado (.pfx) no se encuentra en el servidor."
     try:
@@ -40,7 +40,14 @@ def validar_certificado_pfx():
         private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
             pfx_data, SIFEN_CERT_PASS.encode('utf-8')
         )
-        return True, "Certificado digital Sifen cargado y verificado correctamente."
+        
+        # Extraer información real del certificado para comprobar su autenticidad en los logs
+        subject = certificate.subject.rfc4514_string()
+        issuer = certificate.issuer.rfc4514_string()
+        not_valid_after = certificate.not_valid_after_utc.strftime('%d/%m/%Y') if hasattr(certificate, 'not_valid_after_utc') else "Vigente"
+        
+        info_detallada = f"Certificado digital Sifen cargado OK. Válido hasta: {not_valid_after} | Sujeto: {subject}"
+        return True, info_detallada
     except Exception as e:
         return False, f"Error al abrir el certificado (contraseña incorrecta o archivo corrupto): {str(e)}"
 
