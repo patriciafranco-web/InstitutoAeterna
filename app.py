@@ -94,7 +94,7 @@ class PacienteModel(db.Model):
     token_portal = db.Column(db.String(100), unique=True, default=lambda: str(uuid.uuid4()))
     nombre = db.Column(db.String(150), nullable=False)
     edad = db.Column(db.Integer, nullable=False)
-    programa = db.Column(db.String(150), nullable=False)
+    programa = db.Column(db.String(150), default="General")
     medico = db.Column(db.String(150), nullable=False)
     entrenador = db.Column(db.String(150), default="Manuel Duarte")
     reg_profesional = db.Column(db.String(50), default="MP 4291")
@@ -942,7 +942,6 @@ def agendar_paciente():
     token = request.args.get('token')
     nombre = request.form.get('nombre', '').strip()
     edad = int(request.form.get('edad', 30))
-    programa = request.form.get('programa', 'Longevidad')
     medico = request.form.get('medico', 'Dr. Pedro Calabrese')
     hora_turno = request.form.get('hora_turno', '09:00 hs')
     
@@ -958,7 +957,7 @@ def agendar_paciente():
             id=nuevo_id,
             nombre=nombre,
             edad=edad,
-            programa=programa,
+            programa="General",
             medico=medico,
             hora_turno=hora_turno,
             estado_turno="Confirmado / Sala VIP"
