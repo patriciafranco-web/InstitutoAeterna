@@ -38,7 +38,7 @@
 
         .bloque-superior {
             position: absolute;
-            top: 26mm;     
+            top: 26mm;      
             left: 10mm;     
             width: 128mm;   
             box-sizing: border-box;
@@ -66,7 +66,7 @@
 
         .area-prescripcion {
             position: absolute;
-            top: 44mm;     
+            top: 44mm;      
             left: 10mm;     
             width: 128mm;   
             box-sizing: border-box;
@@ -125,12 +125,9 @@
         </div>
     </div>
 
+    <!-- AQUÍ ESTÁ EL CAMBIO PRINCIPAL -->
     <div class="area-prescripcion">
-        <h4 style="color: #800020; text-transform: uppercase; font-size: 11px; margin: 0 0 8px 0; letter-spacing: 1px;">Indicaciones y Prescripción Médica:</h4>
-        <ol style="padding-left: 15px; line-height: 1.8; margin: 0;">
-            <li><b>Fórmula / Sueroterapia:</b> <i>(Detallar componentes y pauta de administración).</i></li>
-            <li><b>Suplementación / Protocolo:</b> <i>(Detallar dosis, frecuencia y duración).</i></li>
-        </ol>
+        {{ texto_imprimir | safe }}
     </div>
 
     <!-- Bloque Inferior con el Código QR -->
