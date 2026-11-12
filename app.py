@@ -745,7 +745,7 @@ def login():
                 
                 rol_destino = user_info['rol_base']
                 if rol_destino == 'recepcion' or rol_destino == 'secretaria':
-                    seccion_dest = 'caja' # Habilitamos caja directamente también para recepción
+                    seccion_dest = 'caja'
                 elif rol_destino == 'admision':
                     seccion_dest = 'agenda_admision'
                 else:
@@ -781,13 +781,12 @@ def index():
     
     if rol_base == 'recepcion' or rol_base == 'admision':
         rol = 'recepcion'
-        seccion = request.args.get('seccion', 'caja') # Permitir por defecto o según se elija
+        seccion = request.args.get('seccion', 'caja')
     else:
         seccion = request.args.get('seccion', 'agenda_medico' if rol == 'medico' else 'caja')
         
     id_paciente = request.args.get('id')
     
-    # LA AGENDA SIGUE PRIVADA PARA CADA MÉDICO
     if rol == 'medico':
         pacientes_db = PacienteModel.query.filter_by(medico=nombre_usuario).all()
     else:
@@ -829,7 +828,6 @@ def index():
 
     tareas_pendientes = TareaEquipoModel.query.filter_by(profesional_destinatario=nombre_usuario, estado="Pendiente").all()
 
-    # Validar certificado PFX para inyectar su estado real en la vista
     valido_pfx, mensaje_pfx = validar_certificado_pfx()
 
     return render_template(
@@ -1026,7 +1024,7 @@ def guardar_evolucion_soap():
     except Exception as e:
         return jsonify({"status": "error", "mensaje": str(e)}), 500
 
-@app.route('/api/medico/subir-foto-evolucion', methods=['post'])
+@app.route('/api/medico/subir-foto-evolucion', methods=['POST'])
 def subir_foto_evolucion():
     try:
         token = request.args.get('token')
@@ -1076,12 +1074,12 @@ def ia_concluir_estudio():
             system=f"Eres el Asistente IA clínico oficial del Instituto Aeterna. Genera un dictamen médico conciso de 2 o 3 líneas basado en los siguientes valores de laboratorio y biomarcadores.",
             messages=[{"role": "user", "content": f"Valores extraídos: {valores}. Redacta una conclusión clínica profesional."}]
         )
-        dictamen_ia = extraer_texto(response)
+        dictamen_ia = "".join(b.text for b in response.content if hasattr(b, 'text'))
         return jsonify({"status": "success", "conclusion": dictamen_ia})
         
     except Exception as e:
         return jsonify({"status": "error", "conclusion": f"Error al generar con IA: {str(e)}"})
-    
+
 @app.route('/api/medico/guardar-nota-libre', methods=['POST'])
 def guardar_nota_libre():
     data = request.get_json() if request.is_json else request.form
@@ -1612,7 +1610,117 @@ def generar_orden_lab():
                            texto_imprimir=texto_orden)
 
 # ==========================================
-# NUEVA RUTA PARA REGISTRAR PAGO Y PREVISUALIZAR KUDE SIFEN
+# RUTA DE REPORTE CLÍNICO IMPRIMIBLE DESDE EL MÉDICO
+# ==========================================
+@app.route('/medico/reporte-paciente/<string:id_paciente>')
+def reporte_paciente(id_paciente):
+    token = request.args.get('token')
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
+        
+    p = PacienteModel.query.filter_by(id=id_paciente).first()
+    if not p:
+        return "Paciente no encontrado", 404
+        
+    nombre_medico = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
+    biomarcadores = BiomarcadorModel.query.filter_by(id_paciente=p.id).all()
+    evoluciones = ConsultaModel.query.filter_by(id_paciente=p.id).all()
+
+    return render_template_string(REPORTE_IMPRIMIBLE_TEMPLATE, p=p, biomarcadores=biomarcadores, evoluciones=evoluciones, token=token, nombre_medico=nombre_medico)
+
+REPORTE_IMPRIMIBLE_TEMPLATE = """<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte Clínico — Instituto Aeterna</title>
+    <style>
+        body { font-family: 'Inter', Arial, sans-serif; color: #121110; background: #fff; margin: 0; padding: 40px; }
+        .header-membrete { border-bottom: 2px solid #800020; padding-bottom: 15px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        .header-membrete h1 { font-size: 18px; color: #800020; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+        .header-membrete p { font-size: 11px; color: #555; margin: 4px 0 0 0; }
+        .info-paciente { background: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12.5px; }
+        .seccion-titulo { font-size: 13px; font-weight: bold; color: #800020; text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 5px; margin: 20px 0 10px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+        th { background: #f4f6f9; color: #333; font-size: 11px; text-transform: uppercase; }
+        .no-print { margin-bottom: 30px; display: flex; gap: 10px; }
+        .btn { background: #800020; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; text-decoration: none; display: inline-block; }
+        .btn-wa { background: #25d366; }
+        @media print { .no-print { display: none; } body { padding: 0; } }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button onclick="window.print()" class="btn">🖨️ Imprimir / Guardar PDF</button>
+        <button onclick="enviarResumenWhatsApp()" class="btn btn-wa">💬 Enviar Resumen por WhatsApp</button>
+        <a href="javascript:history.back()" class="btn" style="background: #555;">← Volver al Sistema</a>
+    </div>
+
+    <div class="header-membrete">
+        <div>
+            <h1>Instituto Aeterna — Sanatorio Le Blanc</h1>
+            <p>Medicina de Precisión, Longevidad y Optimización Metabólica | CDE, Paraguay</p>
+        </div>
+        <div style="text-align: right;">
+            <p><b>Fecha de Emisión:</b> <span id="fecha-actual"></span></p>
+        </div>
+    </div>
+
+    <div class="info-paciente">
+        <div>
+            <p><b>Paciente:</b> {{ p.nombre }}</p>
+            <p><b>Edad:</b> {{ p.edad }} años</p>
+            <p><b>Programa:</b> {{ p.programa }}</p>
+        </div>
+        <div>
+            <p><b>Médico Tratante:</b> {{ p.medico }}</p>
+            <p><b>Compromiso:</b> {{ p.compromiso }}</p>
+        </div>
+    </div>
+
+    <div class="seccion-titulo">Historial y Evolución Reciente</div>
+    {% if evoluciones %}
+        {% for ev in evoluciones %}
+        <div style="margin-bottom: 12px; font-size: 12.5px; line-height: 1.5; border-left: 3px solid #800020; padding-left: 10px;">
+            <b>📅 {{ ev.fecha }} (Dr/Dra. {{ ev.medico }})</b><br>
+            <span>{{ ev.detalle }}</span>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="font-size: 12px; color: #666;">No hay notas de evolución registradas aún.</p>
+    {% endif %}
+
+    <div class="seccion-titulo">Analítica Longitudinal de Biomarcadores</div>
+    {% if biomarcadores %}
+    <table>
+        <tr><th>Parámetro</th><th>Fecha</th><th>Valor Registrado</th><th>Unidad</th></tr>
+        {% for b in biomarcadores %}
+        <tr>
+            <td><b>{{ b.parametro }}</b></td>
+            <td>{{ b.fecha }}</td>
+            <td>{{ b.valor }}</td>
+            <td>{{ b.unidad }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+        <p style="font-size: 12px; color: #666;">No hay biomarcadores tabulados actualmente.</p>
+    {% endif %}
+
+    <script>
+        document.getElementById('fecha-actual').innerText = new Date().toLocaleDateString();
+        function enviarResumenWhatsApp() {
+            const nombrePaciente = "{{ p.nombre }}";
+            const texto = `¡Hola ${nombrePaciente}! Le escribimos desde el Sanatorio Le Blanc (Instituto Aeterna). Aquí le compartimos el resumen de su evolución clínica y analíticas recientes. Quedamos a disposición.`;
+            window.open(`https://wa.me/?text=` + encodeURIComponent(texto), '_blank');
+        }
+    </script>
+</body>
+</html>
+"""
+
+# ==========================================
+# RUTAS DE FACTURACIÓN Y SIFEN
 # ==========================================
 @app.route('/api/caja/registrar-pago', methods=['POST'])
 def registrar_pago_sifen():
@@ -1625,7 +1733,6 @@ def registrar_pago_sifen():
     monto = float(request.form.get('monto', 0))
     metodo = request.form.get('metodo', 'Efectivo')
     
-    # Genera el CDC oficial de 44 dígitos vinculado al Sifen
     cdc = "0180172292600100100000011202610201234567891"
     estado_sifen = "Aprobado Sifen / DNIT"
     referencia_completa = f"Servicio: {concepto_servicio}"
@@ -1643,7 +1750,6 @@ def registrar_pago_sifen():
     db.session.add(nuevo_pago)
     db.session.commit()
     
-    # Generar Código QR visual para la previsualización del KuDE
     url_validacion = f"{request.host_url}validar-factura/{cdc}"
     qr = qrcode.QRCode(box_size=4, border=2)
     qr.add_data(url_validacion)
@@ -1653,7 +1759,6 @@ def registrar_pago_sifen():
     img_qr.save(buffer, format="PNG")
     qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
     
-    # HTML de Previsualización formal tipo KuDE (Factura Electrónica Paraguay)
     return f"""
     <!DOCTYPE html>
     <html lang="es">
