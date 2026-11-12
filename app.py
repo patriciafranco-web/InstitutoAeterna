@@ -1720,8 +1720,35 @@ REPORTE_IMPRIMIBLE_TEMPLATE = """<!DOCTYPE html>
 """
 
 # ==========================================
-# RUTAS DE FACTURACIÓN Y SIFEN
+# INTEGRACIÓN REAL CON API MIFACTU (SIFEN)
 # ==========================================
+
+MIFACTU_BASE_URL = os.getenv('MIFACTU_BASE_URL', 'https://mifactu.com.py')
+MIFACTU_RUC = os.getenv('MIFACTU_RUC', '80172292')
+MIFACTU_PASSWORD = os.getenv('MIFACTU_PASSWORD', '801722926')
+
+def obtener_token_mifactu():
+    """Autentica contra la API de MiFactu y devuelve el token Bearer (Capítulo 2.2 de la guía)"""
+    try:
+        url = f"{MIFACTU_BASE_URL.rstrip('/')}/api/authenticate"
+        payload = {
+            "ruc": MIFACTU_RUC,
+            "password": MIFACTU_PASSWORD
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        if response.status_code == 200:
+            return response.json().get("token")
+        else:
+            print("Error de autenticación en MiFactu:", response.text)
+            return None
+    except Exception as e:
+        print("Excepción al conectar con MiFactu:", str(e))
+        return None
+
 @app.route('/api/caja/registrar-pago', methods=['POST'])
 def registrar_pago_sifen():
     token = request.args.get('token')
@@ -1733,24 +1760,83 @@ def registrar_pago_sifen():
     monto = float(request.form.get('monto', 0))
     metodo = request.form.get('metodo', 'Efectivo')
     
-    cdc = "0180172292600100100000011202610201234567891"
-    estado_sifen = "Aprobado Sifen / DNIT"
-    referencia_completa = f"Servicio: {concepto_servicio}"
+    # 1. Obtener token dinámico de la API de MiFactu
+    token_mifactu = obtener_token_mifactu()
+    
+    cdc_generado = "0180172292600100100000011202610201234567891"
+    estado_sifen = "Registrado localmente (Sin respuesta de API)"
 
+    if token_mifactu:
+        # 2. Armar el cuerpo de la factura según la Guía de Integración de MiFactu (Opción A - Conector)
+        payload_factura = {
+            "tipope": "1",
+            "iTiDE": 1,
+            "dEst": "001",
+            "dPunExp": "001",
+            "dFeEmiDE": datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+            "iTipTra": 1,
+            "cMoneOpe": "PYG",
+            "iCondOpe": 1,
+            "iNatRec": 2, # No contribuyente / Consumidor final por defecto
+            "dNomRec": paciente_nombre,
+            "dEmailRec": "facturas@example.invalid",
+            "enviar_sifen": True,
+            "Detalles": [
+                {
+                    "dCodInt": "SRV-MED",
+                    "dDesProSer": concepto_servicio,
+                    "cUniMed": "77",
+                    "dDesUniMed": "UNI",
+                    "dCantProSer": 1,
+                    "dPUniProSer": monto,
+                    "dTotopeItem": monto,
+                    "iAfecIVA": 3,
+                    "dTasaIVA": 0
+                }
+            ],
+            "FormaPago": [
+                {
+                    "iTiPago": 1 if metodo == "Efectivo" else 5,
+                    "dDesTiPag": metodo,
+                    "dMonTiPag": monto,
+                    "cMoneTiPag": "PYG"
+                }
+            ]
+        }
+
+        try:
+            headers_mifactu = {
+                "Authorization": f"Bearer {token_mifactu}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            res_mifactu = requests.post(f"{MIFACTU_BASE_URL.rstrip('/')}/api/operation", json=payload_factura, headers=headers_mifactu, timeout=15)
+            resultado_json = res_mifactu.json()
+            
+            if res_mifactu.status_code == 200 and resultado_json.get("status") == "success":
+                cdc_generado = resultado_json.get("CDC", cdc_generado)
+                estado_sifen = "Aprobado Sifen / MiFactu"
+            else:
+                estado_sifen = f"Rechazado: {resultado_json.get('message', 'Error de validación')}"
+        except Exception as api_err:
+            estado_sifen = f"Error de red API: {str(api_err)}"
+
+    # 3. Guardar transacción localmente
     nuevo_pago = PagoModel(
         paciente=paciente_nombre,
         monto=monto,
         metodo=metodo,
-        referencia=referencia_completa,
+        referencia=f"Servicio: {concepto_servicio}",
         estado="Completado",
         fecha=datetime.date.today().strftime('%d/%m/%Y'),
         sifen_status=estado_sifen,
-        cdc=cdc
+        cdc=cdc_generado
     )
     db.session.add(nuevo_pago)
     db.session.commit()
     
-    url_validacion = f"{request.host_url}validar-factura/{cdc}"
+    # Generar QR para el KuDE visual
+    url_validacion = f"{request.host_url}validar-factura/{cdc_generado}"
     qr = qrcode.QRCode(box_size=4, border=2)
     qr.add_data(url_validacion)
     qr.make(fit=True)
@@ -1764,7 +1850,7 @@ def registrar_pago_sifen():
     <html lang="es">
     <head>
         <meta charset="UTF-8">
-        <title>Previsualización Factura Electrónica Sifen — Aeterna</title>
+        <title>Factura Electrónica Sifen — Aeterna</title>
         <style>
             body {{ font-family: 'Inter', sans-serif; background: #f4f6f9; color: #121110; padding: 30px; }}
             .kude-box {{ max-width: 650px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; border-top: 6px solid #800020; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
@@ -1778,7 +1864,6 @@ def registrar_pago_sifen():
             .cdc-section {{ text-align: center; background: #f4f6f9; padding: 12px; border-radius: 6px; margin-top: 20px; }}
             .cdc-code {{ font-family: monospace; font-size: 12px; font-weight: bold; color: #333; word-break: break-all; }}
             .btn-back {{ display: block; width: 100%; background: #800020; color: white; text-align: center; padding: 12px; border-radius: 6px; text-decoration: none; font-weight: bold; text-transform: uppercase; font-size: 12px; margin-top: 25px; box-sizing: border-box; }}
-            .btn-back:hover {{ background: #600018; }}
         </style>
     </head>
     <body>
@@ -1786,15 +1871,15 @@ def registrar_pago_sifen():
             <h2>Instituto Aeterna E.A.S.</h2>
             <div class="sub-header">
                 Sanatorio Le Blanc — Ciudad del Este, Paraguay<br>
-                <b>RUC:</b> 80172292-6 | Timbrado SET N°: 12548962<br>
-                <span style="color: #059669; font-weight: bold;">✔ FACTURA ELECTRÓNICA VÁLIDA (Sifen / e-Kuatia)</span>
+                <b>RUC:</b> 80172292-6<br>
+                <span style="color: #059669; font-weight: bold;">✔ Estado Sifen: {estado_sifen}</span>
             </div>
 
             <div class="info-grid">
                 <div>
-                    <b>Fecha de Emisión:</b> {datetime.date.today().strftime('%d/%m/%Y')}<br>
-                    <b>Cliente / Paciente:</b> {paciente_nombre}<br>
-                    <b>Condición de Venta:</b> Contado ({metodo})
+                    <b>Fecha:</b> {datetime.date.today().strftime('%d/%m/%Y')}<br>
+                    <b>Paciente:</b> {paciente_nombre}<br>
+                    <b>Método:</b> {metodo}
                 </div>
                 <div style="text-align: right;">
                     <img src="data:image/png;base64,{qr_base64}" alt="QR Sifen" style="width: 90px; height: 90px; border: 1px solid #ddd; padding: 2px; background: white;">
@@ -1802,30 +1887,20 @@ def registrar_pago_sifen():
             </div>
 
             <table>
-                <tr>
-                    <th>Descripción / Servicio</th>
-                    <th>Cant.</th>
-                    <th>Precio Unitario</th>
-                    <th>Total</th>
-                </tr>
-                <tr>
-                    <td>{concepto_servicio}</td>
-                    <td>1</td>
-                    <td>₲ {monto:,.0f}</td>
-                    <td>₲ {monto:,.0f}</td>
-                </tr>
+                <tr><th>Descripción</th><th>Cant.</th><th>Precio Unitario</th><th>Total</th></tr>
+                <tr><td>{concepto_servicio}</td><td>1</td><td>₲ {monto:,.0f}</td><td>₲ {monto:,.0f}</td></tr>
             </table>
 
             <div style="text-align: right; margin-bottom: 25px;">
-                <span class="total-row">TOTAL A PAGAR: ₲ {monto:,.0f}</span>
+                <span class="total-row">TOTAL: ₲ {monto:,.0f}</span>
             </div>
 
             <div class="cdc-section">
                 <span style="font-size: 10.5px; text-transform: uppercase; color: #555; display: block; margin-bottom: 4px;">Código de Control (CDC):</span>
-                <span class="cdc-code">{cdc}</span>
+                <span class="cdc-code">{cdc_generado}</span>
             </div>
 
-            <a href="/?token={token}&rol=secretaria&seccion=caja" class="btn-back">← Volver al Panel de Caja y Facturación</a>
+            <a href="/?token={token}&rol=secretaria&seccion=caja" class="btn-back">← Volver al Panel de Caja</a>
         </div>
     </body>
     </html>
