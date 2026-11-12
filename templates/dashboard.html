@@ -93,14 +93,6 @@
             
             <div class="menu-section-title">Módulo de Caja y Ventas</div>
             <a href="/?token={{ token }}&rol={{ rol }}&seccion=caja" class="{% if seccion == 'caja' %}active{% endif %}">💳 Caja y Facturación Sifen</a>
-            
-            <!-- ENLACES DE AETERNAFIN INTEGRADOS PARA LA RECEPCIÓN -->
-            <a href="/ventas?token={{ token }}" class="{% if request.endpoint == 'ventas_vista' %}active{% endif %}">
-                <span>📦 Módulo de Ventas</span>
-            </a>
-            <a href="/cuentas-por-cobrar?token={{ token }}" class="{% if request.endpoint == 'cxc_vista' %}active{% endif %}">
-                <span>💰 Cuentas por Cobrar (CxC)</span>
-            </a>
         {% else %}
             <div class="menu-section-title">Mi Consulta y Pacientes</div>
             <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="{% if seccion == 'agenda_medico' %}active{% endif %}">Mi Agenda de Hoy</a>
@@ -997,6 +989,7 @@
 
     <!-- SCRIPT DE CONTROL UNIFICADO -->
     <script>
+        // Función para expandir automáticamente los textareas según el contenido
         function ajustarAltura(el) {
             el.style.height = 'auto';
             el.style.height = (el.scrollHeight) + 'px';
@@ -1031,6 +1024,7 @@
 
         function guardarNotaLibre(id) {
             const nota = document.getElementById('nota_libre_input').value;
+            // AQUI ESTA EL CAMBIO: agregamos ?token={{ token }}
             fetch('/api/medico/guardar-nota-libre?token={{ token }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1047,6 +1041,7 @@
                 return;
             }
 
+            // AQUI ESTA EL CAMBIO: agregamos ?token={{ token }}
             fetch('/api/medico/guardar-evolucion-soap?token={{ token }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1105,6 +1100,7 @@
             input.value = '';
             chatBody.scrollTop = chatBody.scrollHeight;
 
+            // AQUI ESTA EL CAMBIO: agregamos ?token={{ token }}
             fetch('/api/medico/asistente-ia?token={{ token }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1123,6 +1119,7 @@
             });
         }
 
+        // FUNCIONES DE EXPANSIÓN AMPLIA PARA EL TEXTAREA SOAP AL HACER CLIC
         function expandirSoapMax(el) {
             if (el.value.trim() === '') {
                 el.style.height = '380px';
@@ -1142,6 +1139,7 @@
             }
         }
 
+        // FUNCIÓN PARA AGREGAR FILAS DINÁMICAS EN MEDICINA REGENERATIVA
         let contadorSesiones = document.querySelectorAll('#sesiones-tbody tr').length || 1;
 
         function agregarFilaSesion() {
@@ -1164,6 +1162,7 @@
             tbody.appendChild(tr);
         }
 
+        // GRABADOR / DICTADO DE VOZ SOAP
         let reconocimientoVoz = null;
         let estaDictando = false;
 
