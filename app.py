@@ -1756,10 +1756,23 @@ def registrar_pago_sifen():
         return redirect(url_for('login'))
         
     paciente_nombre = request.form.get('paciente', 'Paciente General')
+    ruc_cliente = request.form.get('ruc_cliente', '').strip()
     concepto_servicio = request.form.get('concepto', 'Consulta / Servicio Médico')
     monto = float(request.form.get('monto', 0))
     metodo = request.form.get('metodo', 'Efectivo')
     
+    # Determinar si es contribuyente (si tiene RUC con guion) o no contribuyente / consumidor final
+    i_nat_rec = 1 if "-" in ruc_cliente else 2
+    
+    if "-" in ruc_cliente:
+        partes = ruc_cliente.split("-")
+        ruc_limpio = partes[0].strip()
+        dv_limpio = partes[1].strip()
+    else:
+        ruc_limpio = ""
+        dv_limpio = ""
+        num_id_limpio = ruc_cliente if ruc_cliente else "0"
+
     # 1. Obtener token dinámico de la API de MiFactu
     token_mifactu = obtener_token_mifactu()
     
@@ -1777,7 +1790,7 @@ def registrar_pago_sifen():
             "iTipTra": 1,
             "cMoneOpe": "PYG",
             "iCondOpe": 1,
-            "iNatRec": 2, # No contribuyente / Consumidor final por defecto
+            "iNatRec": i_nat_rec,
             "dNomRec": paciente_nombre,
             "dEmailRec": "facturas@example.invalid",
             "enviar_sifen": True,
@@ -1804,6 +1817,13 @@ def registrar_pago_sifen():
             ]
         }
 
+        # Asignar campos específicos según la naturaleza del receptor
+        if i_nat_rec == 1:
+            payload_factura["dRucRec"] = ruc_limpio
+            payload_factura["dDVRec"] = dv_limpio
+        else:
+            payload_factura["dNumIDRec"] = num_id_limpio
+
         try:
             headers_mifactu = {
                 "Authorization": f"Bearer {token_mifactu}",
@@ -1823,7 +1843,7 @@ def registrar_pago_sifen():
 
     # 3. Guardar transacción localmente
     nuevo_pago = PagoModel(
-        paciente=paciente_nombre,
+        paciente=f"{paciente_nombre} ({ruc_cliente if ruc_cliente else 'Innominado'})",
         monto=monto,
         metodo=metodo,
         referencia=f"Servicio: {concepto_servicio}",
@@ -1879,6 +1899,7 @@ def registrar_pago_sifen():
                 <div>
                     <b>Fecha:</b> {datetime.date.today().strftime('%d/%m/%Y')}<br>
                     <b>Paciente:</b> {paciente_nombre}<br>
+                    <b>RUC / Cédula:</b> {ruc_cliente if ruc_cliente else 'Innominado'}<br>
                     <b>Método:</b> {metodo}
                 </div>
                 <div style="text-align: right;">
