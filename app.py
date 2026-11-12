@@ -11,6 +11,8 @@ import datetime
 import time
 import anthropic
 import re
+import html
+import secrets
 
 import qrcode
 import io
@@ -62,7 +64,9 @@ def validar_certificado_pfx():
 client = anthropic.Anthropic()
 
 app = Flask(__name__)
-app.secret_key = 'aeterna_secret_key_2026_produccion_total_ilimitada'
+# La clave de sesión debe venir de una variable de entorno (SECRET_KEY).
+# Si no existe, se genera una aleatoria (las sesiones se pierden al reiniciar).
+app.secret_key = os.getenv('SECRET_KEY') or secrets.token_hex(32)
 
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///aeterna.db')
 if database_url.startswith("postgres://"):
@@ -116,7 +120,8 @@ class PagoModel(db.Model):
     referencia = db.Column(db.String(100), default="N/A")
     estado = db.Column(db.String(50), default="Completado")
     fecha = db.Column(db.String(50), default="2026-10-20")
-    sifen_status = db.Column(db.String(50), default="Aprobado Sifen")
+    # Ampliado a 255: los mensajes de SIFEN superan los 50 caracteres.
+    sifen_status = db.Column(db.String(255), default="Aprobado Sifen")
     cdc = db.Column(db.String(100), nullable=False)
     establecimiento = db.Column(db.String(3), default="001")
     punto_expedicion = db.Column(db.String(3), default="001")
@@ -1673,9 +1678,16 @@ REPORTE_IMPRIMIBLE_TEMPLATE = """<!DOCTYPE html>
 
 MIFACTU_BASE_URL = os.getenv('MIFACTU_BASE_URL', 'https://mifactu.com.py')
 MIFACTU_RUC = os.getenv('MIFACTU_RUC', '80172292')
-MIFACTU_PASSWORD = os.getenv('MIFACTU_PASSWORD', '801722926')
+# La contraseña NUNCA va en el código: definila como variable de entorno MIFACTU_PASSWORD.
+MIFACTU_PASSWORD = os.getenv('MIFACTU_PASSWORD', '')
+
+MIFACTU_OPERATION_URL = f"{MIFACTU_BASE_URL.rstrip('/')}/api/operation"
+
 
 def obtener_token_mifactu():
+    if not MIFACTU_PASSWORD:
+        print("MiFactu: falta la variable de entorno MIFACTU_PASSWORD.")
+        return None
     try:
         url = f"{MIFACTU_BASE_URL.rstrip('/')}/api/authenticate"
         payload = {"ruc": MIFACTU_RUC, "password": MIFACTU_PASSWORD}
@@ -1683,9 +1695,64 @@ def obtener_token_mifactu():
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         if response.status_code == 200:
             return response.json().get("token")
+        print("MiFactu: autenticación falló:", response.status_code, response.text[:200])
     except Exception as e:
         print("Excepción al conectar con MiFactu:", str(e))
     return None
+
+
+def headers_mifactu(token_m):
+    return {
+        "Authorization": f"Bearer {token_m}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+
+def siguiente_numero_documento(establecimiento, punto_expedicion):
+    """Correlativo propio: último número usado + 1 (7 dígitos)."""
+    ultimo = 0
+    pagos = PagoModel.query.filter_by(establecimiento=establecimiento, punto_expedicion=punto_expedicion).all()
+    for p in pagos:
+        try:
+            ultimo = max(ultimo, int(p.numero_documento))
+        except (TypeError, ValueError):
+            pass
+    return f"{ultimo + 1:07d}"
+
+
+def consultar_estado_mifactu(token_m, est, pun, num, esperas=(0,)):
+    """
+    Consulta el estado (tipOpe=2). 'esperas' = segundos a esperar antes de cada intento.
+    Devuelve un texto de estado, o None si no se pudo consultar.
+    """
+    payload = {"tipOpe": "2", "dEst": est, "dPunExp": pun, "dNumDoc": num, "tipoDoc": "FE"}
+    estado = None
+    for espera in esperas:
+        if espera:
+            time.sleep(espera)
+        try:
+            rc = requests.post(MIFACTU_OPERATION_URL, json=payload, headers=headers_mifactu(token_m), timeout=10)
+            if rc.status_code == 200:
+                r = rc.json().get("response") or {}
+                estado = r.get("Estado") or estado
+                if estado:
+                    if estado.startswith("Aprobado"):
+                        return estado
+                    if estado in ("Rechazado", "Error"):
+                        retorno = (r.get("DE") or {}).get("Retorno") or {}
+                        msg = retorno.get("Mensaje") or ""
+                        return f"{estado}: {msg}" if msg else estado
+            else:
+                try:
+                    msg_err = rc.json().get("message", "")
+                except Exception:
+                    msg_err = ""
+                estado = f"Error consulta ({rc.status_code}): {msg_err}"
+        except Exception as e:
+            estado = f"Error de red API: {str(e)}"
+    return estado
+
 
 @app.route('/api/caja/registrar-pago', methods=['POST'])
 def registrar_pago_sifen():
@@ -1693,44 +1760,47 @@ def registrar_pago_sifen():
     if not token or f'user_{token}' not in session:
         return redirect(url_for('login'))
         
-    paciente_nombre = request.form.get('paciente', 'Paciente General')
+    paciente_nombre = request.form.get('paciente', 'Paciente General').strip() or 'Paciente General'
     ruc_cliente = request.form.get('ruc_cliente', '').strip()
     concepto_servicio = request.form.get('concepto', 'Consulta / Servicio Médico')
     monto = float(request.form.get('monto', 0))
     metodo = request.form.get('metodo', 'Efectivo')
     
-    i_nat_rec = 1 if "-" in ruc_cliente else 2
+    # Receptor: contribuyente (RUC con DV) o no contribuyente (cédula / innominado)
+    ruc_limpio = ""
+    dv_limpio = ""
+    num_id_limpio = "0"
     if "-" in ruc_cliente:
-        partes = ruc_cliente.split("-")
-        ruc_limpio = partes[0].strip()
-        dv_limpio = partes[1].strip()
+        i_nat_rec = 1
+        partes = ruc_cliente.split("-", 1)
+        ruc_limpio = re.sub(r'\D', '', partes[0])
+        dv_limpio = re.sub(r'\D', '', partes[1])
     else:
-        ruc_limpio = ""
-        dv_limpio = ""
-        num_id_limpio = ruc_cliente if ruc_cliente else "0"
+        i_nat_rec = 2
+        num_id_limpio = re.sub(r'\W', '', ruc_cliente) or "0"
 
-    token_mifactu = obtener_token_mifactu()
-    cdc_generado = "0180172292600100100000011202610201234567891"
-    estado_sifen = "Registrado localmente (Sin respuesta de API)"
+    cdc_generado = None
+    estado_sifen = "Error: no se pudo autenticar con MiFactu (revisá MIFACTU_PASSWORD)"
     
-    num_doc_aleatorio = f"{random.randint(1, 9999999):07d}"
     establecimiento = "001"
     punto_expedicion = "001"
+    num_doc = siguiente_numero_documento(establecimiento, punto_expedicion)
+    monto_str = str(int(monto)) if float(monto).is_integer() else str(monto)
+
+    token_mifactu = obtener_token_mifactu()
 
     if token_mifactu:
         payload_factura = {
-            "tipope": 1,
-            "iTiDE": 1,
+            "tipOpe": "1",
+            "iTiDE": "1",
             "dEst": establecimiento,
             "dPunExp": punto_expedicion,
-            "dNumDoc": num_doc_aleatorio,
+            "dNumDoc": num_doc,
             "dFeEmiDE": datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-            "iTipTra": 1,
+            "iTipTra": "2",  # 2 = Prestación de servicios
             "cMoneOpe": "PYG",
-            "iCondOpe": 1,
-            "iNatRec": i_nat_rec,
-            "dNomRec": paciente_nombre,
-            "dEmailRec": "facturas@example.invalid",
+            "iCondOpe": "1",
+            "iNatRec": str(i_nat_rec),
             "enviar_sifen": True,
             "Detalles": [
                 {
@@ -1738,72 +1808,92 @@ def registrar_pago_sifen():
                     "dDesProSer": concepto_servicio,
                     "cUniMed": "77",
                     "dDesUniMed": "UNI",
-                    "dCantProSer": 1,
-                    "dPUniProSer": monto,
-                    "dTotopeItem": monto,
-                    "iAfecIVA": 3,
-                    "dTasaIVA": 0
+                    "dCantProSer": "1",
+                    "dPUniProSer": monto_str,
+                    "dTotBruOpeItem": monto_str,
+                    "dDescItem": "0",
+                    "dTotOpeItem": monto_str,
+                    "iAfecIVA": "3",
+                    "dTasaIVA": "0",
+                    "dBasGravIVA": "0",
+                    "dLiqIVAItem": "0"
+                }
+            ],
+            "Subtotales": [
+                {
+                    "dSub10": "0", "dSub5": "0", "dSubExe": monto_str,
+                    "dTotOpe": monto_str, "dTotGralOpe": monto_str,
+                    "dTotIVA": "0", "dIVA10": "0", "dIVA5": "0"
                 }
             ],
             "FormaPago": [
                 {
-                    "iTiPago": 1 if metodo == "Efectivo" else 5,
+                    "iTiPago": "1" if metodo == "Efectivo" else "5",
                     "dDesTiPag": metodo,
-                    "dMonTiPag": monto,
+                    "dMonTiPag": monto_str,
                     "cMoneTiPag": "PYG"
                 }
             ]
         }
 
         if i_nat_rec == 1:
+            # RUC >= 80000000 corresponde normalmente a personas jurídicas
+            try:
+                es_juridica = int(ruc_limpio) >= 80000000
+            except ValueError:
+                es_juridica = False
+            payload_factura["iTiContRec"] = "2" if es_juridica else "1"
+            payload_factura["iTipIDRec"] = "1"
             payload_factura["dRucRec"] = ruc_limpio
             payload_factura["dDVRec"] = dv_limpio
+            payload_factura["dNomRec"] = paciente_nombre
+        elif num_id_limpio == "0":
+            # Innominado
+            payload_factura["iTipIDRec"] = "5"
+            payload_factura["dNumIDRec"] = "0"
+            payload_factura["dNomRec"] = "Sin Nombre"
         else:
+            payload_factura["iTipIDRec"] = "1"  # cédula paraguaya
             payload_factura["dNumIDRec"] = num_id_limpio
+            payload_factura["dNomRec"] = paciente_nombre
 
         try:
-            headers_mifactu = {
-                "Authorization": f"Bearer {token_mifactu}",
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-            res_mifactu = requests.post(f"{MIFACTU_BASE_URL.rstrip('/')}/api/operation", json=payload_factura, headers=headers_mifactu, timeout=15)
-            resultado_json = res_mifactu.json()
-            
+            res_mifactu = requests.post(MIFACTU_OPERATION_URL, json=payload_factura,
+                                        headers=headers_mifactu(token_mifactu), timeout=20)
+            try:
+                resultado_json = res_mifactu.json()
+            except Exception:
+                resultado_json = {}
+
             if res_mifactu.status_code == 200 and resultado_json.get("status") == "success":
-                cdc_generado = resultado_json.get("CDC", cdc_generado)
-                
-                # CORREGIDO: tipope como ENTERO (2) según Capítulo 8 de la Guía
-                payload_consulta = {
-                    "tipope": 2,
-                    "dEst": establecimiento,
-                    "dPunExp": punto_expedicion,
-                    "dNumDoc": num_doc_aleatorio,
-                    "tipoDoc": "FE"
-                }
-                res_consulta = requests.post(f"{MIFACTU_BASE_URL.rstrip('/')}/api/operation", json=payload_consulta, headers=headers_mifactu, timeout=10)
-                if res_consulta.status_code == 200:
-                    data_estado = res_consulta.json().get("response", {})
-                    estado_sifen = data_estado.get("Estado", "Aprobado Sifen / MiFactu")
-                else:
-                    estado_sifen = "Aprobado (En proceso Sifen)"
+                cdc_generado = resultado_json.get("CDC")
+                estado_sifen = "Procesando"
+                # Espera creciente (~15 s máx.) para no superar el timeout del servidor web.
+                # Si sigue en proceso, se reconsulta al abrir el KUDE.
+                nuevo = consultar_estado_mifactu(token_mifactu, establecimiento, punto_expedicion,
+                                                 num_doc, esperas=(2, 3, 5, 5))
+                if nuevo:
+                    estado_sifen = nuevo
             else:
-                estado_sifen = f"Rechazado: {resultado_json.get('message', 'Error de validación')}"
+                estado_sifen = f"Error API ({res_mifactu.status_code}): {resultado_json.get('message', 'Error de validación')}"
         except Exception as api_err:
             estado_sifen = f"Error de red API: {str(api_err)}"
 
+    if not cdc_generado:
+        cdc_generado = "SIN-CDC"
+
     nuevo_pago = PagoModel(
-        paciente=f"{paciente_nombre} ({ruc_cliente if ruc_cliente else 'Innominado'})",
+        paciente=f"{paciente_nombre} ({ruc_cliente if ruc_cliente else 'Innominado'})"[:150],
         monto=monto,
         metodo=metodo,
-        referencia=f"Servicio: {concepto_servicio}",
+        referencia=f"Servicio: {concepto_servicio}"[:100],
         estado="Completado",
         fecha=datetime.date.today().strftime('%d/%m/%Y'),
-        sifen_status=estado_sifen,
+        sifen_status=(estado_sifen or "Procesando")[:250],
         cdc=cdc_generado,
         establecimiento=establecimiento,
         punto_expedicion=punto_expedicion,
-        numero_documento=num_doc_aleatorio
+        numero_documento=num_doc
     )
     db.session.add(nuevo_pago)
     db.session.commit()
@@ -1821,25 +1911,33 @@ def descargar_kude_oficial(pago_id):
     
     pdf_base64 = None
     if token_mifactu:
-        # CORREGIDO: tipope como ENTERO (4) según Capítulo 9 de la Guía
-        payload_kude = {
-            "tipope": 4,
-            "dEst": pago.establecimiento,
-            "dPunExp": pago.punto_expedicion,
-            "dNumDoc": pago.numero_documento,
-            "tipoDoc": "FE"
-        }
-        headers_mifactu = {
-            "Authorization": f"Bearer {token_mifactu}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-        try:
-            res = requests.post(f"{MIFACTU_BASE_URL.rstrip('/')}/api/operation", json=payload_kude, headers=headers_mifactu, timeout=15)
-            if res.status_code == 200:
-                pdf_base64 = res.json().get("kude")
-        except Exception as e:
-            print("Error descargando PDF de MiFactu:", str(e))
+        estado_actual = pago.sifen_status or ""
+        # Si todavía no está aprobado ni falló, reconsultar el estado ahora
+        if (not estado_actual.startswith("Aprobado")
+                and not estado_actual.startswith(("Rechazado", "Error"))
+                and pago.cdc != "SIN-CDC"):
+            nuevo = consultar_estado_mifactu(token_mifactu, pago.establecimiento,
+                                             pago.punto_expedicion, pago.numero_documento)
+            if nuevo:
+                pago.sifen_status = nuevo[:250]
+                db.session.commit()
+
+        # El KUDE se pide solo con el documento aprobado
+        if (pago.sifen_status or "").startswith("Aprobado"):
+            payload_kude = {
+                "tipOpe": "4",
+                "dEst": pago.establecimiento,
+                "dPunExp": pago.punto_expedicion,
+                "dNumDoc": pago.numero_documento,
+                "tipoDoc": "FE"
+            }
+            try:
+                res = requests.post(MIFACTU_OPERATION_URL, json=payload_kude,
+                                    headers=headers_mifactu(token_mifactu), timeout=20)
+                if res.status_code == 200:
+                    pdf_base64 = res.json().get("kude")
+            except Exception as e:
+                print("Error descargando PDF de MiFactu:", str(e))
             
     if pdf_base64:
         pdf_bytes = base64.b64decode(pdf_base64)
@@ -1849,21 +1947,45 @@ def descargar_kude_oficial(pago_id):
             as_attachment=True,
             download_name=f"Factura_Sifen_{pago.numero_documento}.pdf"
         )
+
+    # Pantalla de estado (ya no dice "con éxito" si falló)
+    estado = pago.sifen_status or ""
+    if estado.startswith(("Rechazado", "Error")):
+        titulo, color = "No se pudo emitir la factura", "#dc2626"
+    elif estado.startswith("Aprobado"):
+        titulo, color = "Factura aprobada (KUDE no disponible aún)", "#059669"
     else:
-        return f"""
-        <!DOCTYPE html>
-        <html lang="es">
-        <head><meta charset="UTF-8"><title>Factura Registrada</title></head>
-        <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #f4f6f9;">
-            <div style="background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 8px; border-top: 5px solid #059669; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <h2 style="color: #059669;">¡Factura Registrada con Éxito!</h2>
-                <p><b>Estado Sifen:</b> {pago.sifen_status}</p>
-                <p><b>CDC:</b> {pago.cdc}</p>
-                <a href="/?token={token}&rol=secretaria&seccion=caja" style="display: inline-block; background: #800020; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; font-weight: bold;">← Volver al Panel de Caja</a>
-            </div>
-        </body>
-        </html>
-        """
+        titulo, color = "Factura registrada: en proceso en SIFEN", "#d97706"
+
+    estado_html = html.escape(estado)
+    cdc_html = ""
+    if pago.cdc and pago.cdc != "SIN-CDC":
+        cdc_html = f"<p><b>CDC:</b> {html.escape(pago.cdc)}</p>"
+    num_html = html.escape(f"{pago.establecimiento}-{pago.punto_expedicion}-{pago.numero_documento}")
+    token_html = html.escape(token)
+    reintentar = ""
+    if not estado.startswith(("Rechazado", "Error")):
+        reintentar = (f'<a href="/api/caja/descargar-kude/{pago.id}?token={token_html}" '
+                      f'style="display: inline-block; background: #555; color: white; padding: 10px 20px; '
+                      f'text-decoration: none; border-radius: 5px; margin-top: 15px; margin-right: 8px; font-weight: bold;">'
+                      f'↻ Actualizar estado</a>')
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head><meta charset="UTF-8"><title>Estado de la Factura</title></head>
+    <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #f4f6f9;">
+        <div style="background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 8px; border-top: 5px solid {color}; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <h2 style="color: {color};">{titulo}</h2>
+            <p><b>Documento:</b> {num_html}</p>
+            <p><b>Estado Sifen:</b> {estado_html}</p>
+            {cdc_html}
+            {reintentar}
+            <a href="/?token={token_html}&rol=secretaria&seccion=caja" style="display: inline-block; background: #800020; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; font-weight: bold;">← Volver al Panel de Caja</a>
+        </div>
+    </body>
+    </html>
+    """
 
 if __name__ == '__main__':
     valido, mensaje = validar_certificado_pfx()
