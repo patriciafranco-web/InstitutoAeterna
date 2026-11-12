@@ -133,6 +133,42 @@ class PagoModel(db.Model):
     sifen_status = db.Column(db.String(50), default="Aprobado Sifen")
     cdc = db.Column(db.String(100), nullable=False)
 
+# ==========================================
+# MÓDULOS INTEGRADOS DE VENTAS Y CXC (AETERNAFIN)
+# ==========================================
+
+class VentaModel(db.Model):
+    __tablename__ = 'ventas'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    fecha = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
+    cliente_nombre = db.Column(db.String(150), nullable=False)
+    plan_nombre_historico = db.Column(db.String(200), default="Servicio / Consulta")
+    forma_pago = db.Column(db.String(50), default="Efectivo")
+    num_cuotas = db.Column(db.Integer, default=1)
+    cuenta_nombre = db.Column(db.String(100), default="Caja Principal")
+    subtotal = db.Column(db.Float, default=0.0)
+    total = db.Column(db.Float, default=0.0)
+    pagado = db.Column(db.Float, default=0.0)
+    saldo = db.Column(db.Float, default=0.0)
+    estado = db.Column(db.String(50), default="Pendiente")
+    iva = db.Column(db.Float, default=0.0)
+    ganancia_plan = db.Column(db.Float, default=0.0)
+
+class CuentaPorCobrarModel(db.Model):
+    __tablename__ = 'cuentas_por_cobrar'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    venta_id = db.Column(db.Integer, nullable=True)
+    cliente_nombre = db.Column(db.String(150), nullable=False)
+    numero_cuota_str = db.Column(db.String(50), default="1 de 1")
+    concepto = db.Column(db.String(250), nullable=False)
+    moneda = db.Column(db.String(10), default="PYG")
+    monto = db.Column(db.Float, default=0.0)
+    pagado = db.Column(db.Float, default=0.0)
+    saldo = db.Column(db.Float, default=0.0)
+    fecha_emision = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
+    fecha_vencimiento = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
+    estado = db.Column(db.String(50), default="Pendiente")
+
 class EstudioNoLabModel(db.Model):
     __tablename__ = 'estudios_no_lab'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -863,6 +899,80 @@ def index():
         mensaje_pfx=mensaje_pfx,
         json=json
     )
+
+# ==========================================
+# RUTAS DE VENTAS Y CUENTAS POR COBRAR (EXCLUSIVO RECEPCIÓN)
+# ==========================================
+
+@app.route('/ventas')
+def ventas_vista():
+    token = request.args.get('token')
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
+    
+    rol_base = session.get(f'rol_base_{token}', '')
+    if rol_base not in ['recepcion', 'secretaria']:
+        return "Acceso denegado. Módulo exclusivo para Recepción.", 403
+
+    ventas_db = VentaModel.query.all()
+    pacientes_db = PacienteModel.query.all()
+    
+    return render_template('ventas.html', ventas=ventas_db, pacientes=pacientes_db, token=token)
+
+@app.route('/cuentas-por-cobrar')
+def cxc_vista():
+    token = request.args.get('token')
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
+        
+    rol_base = session.get(f'rol_base_{token}', '')
+    if rol_base not in ['recepcion', 'secretaria']:
+        return "Acceso denegado. Módulo exclusivo para Recepción.", 403
+
+    cuentas_db = CuentaPorCobrarModel.query.all()
+    return render_template('cxc.html', cuentas=cuentas_db, token=token)
+
+@app.route('/api/registrar-venta-completa', methods=['POST'])
+def registrar_venta_completa():
+    token = request.args.get('token')
+    cliente = request.form.get('cliente_nombre', 'Paciente General')
+    plan = request.form.get('plan_nombre', 'Consulta / Servicio')
+    monto = float(request.form.get('monto', 0))
+    forma_pago = request.form.get('forma_pago', 'Efectivo')
+    num_cuotas = int(request.form.get('num_cuotas', 1))
+
+    iva = round(monto / 11.0, 2)
+    ganancia = round(monto - iva, 2)
+
+    nueva_venta = VentaModel(
+        cliente_nombre=cliente,
+        plan_nombre_historico=plan,
+        forma_pago=forma_pago,
+        num_cuotas=num_cuotas,
+        subtotal=monto,
+        total=monto,
+        pagado=0.0 if num_cuotas > 1 else monto,
+        saldo=monto if num_cuotas > 1 else 0.0,
+        estado='Pendiente' if num_cuotas > 1 else 'Completado',
+        iva=iva,
+        ganancia_plan=ganancia
+    )
+    db.session.add(nueva_venta)
+    db.session.flush()
+
+    nueva_cxc = CuentaPorCobrarModel(
+        venta_id=nueva_venta.id,
+        cliente_nombre=cliente,
+        numero_cuota_str=f"1 de {num_cuotas}",
+        concepto=f"Cuota 1 de {num_cuotas} - {plan} (Venta #{nueva_venta.id})",
+        monto=monto,
+        saldo=monto if num_cuotas > 1 else 0.0,
+        estado='Pendiente' if num_cuotas > 1 else 'Pagado'
+    )
+    db.session.add(nueva_cxc)
+    db.session.commit()
+
+    return redirect(url_for('ventas_vista', token=token))
 
 @app.route('/portal/pre-consulta/<token_portal>', methods=['GET'])
 def portal_preconsulta_por_token(token_portal):
