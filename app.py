@@ -1773,9 +1773,9 @@ def registrar_pago_sifen():
             if res_mifactu.status_code == 200 and resultado_json.get("status") == "success":
                 cdc_generado = resultado_json.get("CDC", cdc_generado)
                 
-                # Consultar estado real (Capítulo 8 - tipope: 2)
+                # CORREGIDO: tipope como ENTERO (2) según Capítulo 8 de la Guía
                 payload_consulta = {
-                    "tipope": "2",
+                    "tipope": 2,
                     "dEst": establecimiento,
                     "dPunExp": punto_expedicion,
                     "dNumDoc": num_doc_aleatorio,
@@ -1808,7 +1808,6 @@ def registrar_pago_sifen():
     db.session.add(nuevo_pago)
     db.session.commit()
     
-    # Redirige de inmediato a descargar el PDF/KuDE oficial de MiFactu (Capítulo 9 - tipope: 4)
     return redirect(url_for('descargar_kude_oficial', pago_id=nuevo_pago.id, token=token))
 
 @app.route('/api/caja/descargar-kude/<int:pago_id>', methods=['GET'])
@@ -1822,8 +1821,9 @@ def descargar_kude_oficial(pago_id):
     
     pdf_base64 = None
     if token_mifactu:
+        # CORREGIDO: tipope como ENTERO (4) según Capítulo 9 de la Guía
         payload_kude = {
-            "tipope": "4",
+            "tipope": 4,
             "dEst": pago.establecimiento,
             "dPunExp": pago.punto_expedicion,
             "dNumDoc": pago.numero_documento,
@@ -1855,11 +1855,10 @@ def descargar_kude_oficial(pago_id):
         <html lang="es">
         <head><meta charset="UTF-8"><title>Factura Registrada</title></head>
         <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #f4f6f9;">
-            <div style="background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 8px; border-top: 5px solid #059669;">
+            <div style="background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 8px; border-top: 5px solid #059669; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
                 <h2 style="color: #059669;">¡Factura Registrada con Éxito!</h2>
                 <p><b>Estado Sifen:</b> {pago.sifen_status}</p>
                 <p><b>CDC:</b> {pago.cdc}</p>
-                <p style="font-size: 12px; color: #666;">(El PDF oficial en Base64 se generará en breve desde los servidores de SIFEN)</p>
                 <a href="/?token={token}&rol=secretaria&seccion=caja" style="display: inline-block; background: #800020; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; font-weight: bold;">← Volver al Panel de Caja</a>
             </div>
         </body>
