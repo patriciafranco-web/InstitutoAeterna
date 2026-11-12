@@ -39,7 +39,6 @@
         .ficha-card-title { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
         .ficha-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12.5px; }
         .ficha-row { margin-bottom: 8px; font-size: 12.5px; line-height: 1.6; }
-        .textarea-expandible { height: 180px; transition: all 0.3s ease; resize: vertical; width: 100%; }
         .doctor-accordion-header { background: var(--bg-main); border: 1px solid var(--border); padding: 12px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12.5px; color: var(--accent); display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
         .doctor-consultas-list { display: none; padding-left: 12px; margin-bottom: 12px; border-left: 2px solid var(--accent); }
         .consulta-item { background: var(--bg-main); border: 1px solid var(--border); padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; font-size: 12.5px; line-height: 1.5; }
@@ -112,6 +111,8 @@
             <a href="/?token={{ token }}&rol=medico&seccion=annovator&id={{ p.id }}" class="{% if seccion == 'annovator' %}active{% endif %}">Protocolo Annovator</a>
             <a href="/?token={{ token }}&rol=medico&seccion=wearables&id={{ p.id }}" class="{% if seccion == 'wearables' %}active{% endif %}">Wearables y Biometría</a>
             <a href="/?token={{ token }}&rol=medico&seccion=consentimientos&id={{ p.id }}" class="{% if seccion == 'consentimientos' %}active{% endif %}">Consentimientos</a>
+            <!-- NUEVA SECCIÓN DE REPORTE CLÍNICO EN LA HISTORIA CLÍNICA -->
+            <a href="/?token={{ token }}&rol=medico&seccion=reporte_hc&id={{ p.id }}" class="{% if seccion == 'reporte_hc' %}active{% endif %}">📊 Reporte Clínico y Gráficos HC</a>
             {% endif %}
         {% endif %}
     </div>
@@ -207,7 +208,6 @@
                     </div>
                 </div>
 
-                <!-- Formulario interactivo para probar el cobro y previsualización Sifen -->
                 <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px; margin-bottom: 25px;">
                     <h4 style="color: var(--accent); margin-top: 0; font-size: 13px; text-transform: uppercase;">Registrar Servicio, Monto y Previsualizar Sifen</h4>
                     <form action="/api/caja/registrar-pago?token={{ token }}" method="POST" style="display: grid; grid-template-columns: 2fr 2fr 1fr 1fr 1fr; gap: 10px; align-items: end;">
@@ -235,7 +235,6 @@
                     </form>
                 </div>
 
-                <!-- Listado de transacciones y CDC generados -->
                 <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin-bottom: 10px;">Comprobantes Electrónicos Emitidos Hoy</h4>
                 <table>
                     <tr><th>Fecha</th><th>Paciente / RUC</th><th>Monto</th><th>Método</th><th>Estado Sifen</th><th>CDC (Código de Control)</th></tr>
@@ -392,7 +391,78 @@
                 {% endif %}
             </div>
 
-        <!-- 2. EVOLUCIÓN SOAP MEJORADA CON EXPANSIÓN AMPLIA -->
+        <!-- 2. REPORTE CLÍNICO, ANALÍTICA Y GRÁFICOS HC (NUEVA SECCIÓN) -->
+        {% elif seccion == 'reporte_hc' and p %}
+            <div class="box" style="border: 1px solid var(--accent);">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: var(--accent); text-transform: uppercase; font-size: 13.5px;">Resumen Clínico, Analítica y Gráficos — {{ p.nombre }}</h3>
+                    <div style="display: flex; gap: 10px;">
+                        <a href="/medico/reporte-paciente/{{ p.id }}?token={{ token }}" target="_blank" class="btn" style="background: var(--accent); padding: 8px 16px; font-size: 11px; text-decoration: none; color: #ffffff; text-align: center;">🖨️ Ver Formato Imprimible (Membrete)</a>
+                        <button type="button" class="btn" style="background: #25d366; color: white; padding: 8px 16px; font-size: 11px;" onclick="enviarResumenHCWhatsApp('{{ p.nombre }}')">💬 Enviar Resumen por WhatsApp</button>
+                    </div>
+                </div>
+
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px;">
+                    Vista consolidada del expediente de la historia clínica. Incluye el historial de evoluciones y los biomarcadores registrados para el seguimiento longitudinal del paciente en el Sanatorio Le Blanc.
+                </p>
+
+                <div class="ficha-grid-2" style="margin-bottom: 25px;">
+                    <div class="ficha-card">
+                        <div class="ficha-card-title">Datos del Expediente</div>
+                        <p class="ficha-row"><b>Paciente:</b> {{ p.nombre }} ({{ p.edad }} años)</p>
+                        <p class="ficha-row"><b>Médico Asignado:</b> {{ p.medico }}</p>
+                        <p class="ficha-row"><b>Programa:</b> {{ p.programa }}</p>
+                        <p class="ficha-row"><b>Compromiso:</b> <span class="texto-verde">{{ p.compromiso }}</span></p>
+                    </div>
+                    <div class="ficha-card">
+                        <div class="ficha-card-title">Nota Médica / Observación</div>
+                        <p class="ficha-row">{{ p.observacion_medica_libre if p.observacion_medica_libre else 'Sin notas libres registradas.' }}</p>
+                    </div>
+                </div>
+
+                <div style="font-size: 12px; font-weight: bold; color: var(--accent); text-transform: uppercase; margin-bottom: 10px;">Evoluciones Registradas en el Expediente</div>
+                <div style="background: var(--bg-main); padding: 15px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 20px; max-height: 250px; overflow-y: auto;">
+                    {% if historial_consultas %}
+                        {% for c in historial_consultas %}
+                            <div style="margin-bottom: 12px; border-bottom: 1px dashed var(--border); padding-bottom: 8px;">
+                                <b style="color: var(--accent); font-size: 11.5px;">📅 Fecha: {{ c.fecha }} — Dr/Dra. {{ c.medico }}</b>
+                                <p style="font-size: 12px; margin: 4px 0 0 0; white-space: pre-wrap;">{{ c.detalle }}</p>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">No hay consultas previas registradas.</p>
+                    {% endif %}
+                </div>
+
+                <div style="font-size: 12px; font-weight: bold; color: var(--accent); text-transform: uppercase; margin-bottom: 10px;">Analítica y Biomarcadores Históricos</div>
+                <div style="background: var(--bg-main); padding: 15px; border-radius: 6px; border: 1px solid var(--border);">
+                    {% if biomarcadores %}
+                    <table>
+                        <tr><th>Parámetro</th><th>Fecha</th><th>Valor</th><th>Unidad</th><th>Estado</th></tr>
+                        {% for b in biomarcadores %}
+                        <tr>
+                            <td><b>{{ b.parametro }}</b></td>
+                            <td>{{ b.fecha }}</td>
+                            <td>{{ b.valor }}</td>
+                            <td>{{ b.unidad }}</td>
+                            <td style="color: var(--success);">Registrado</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                    {% else %}
+                        <p style="font-size: 12px; color: var(--text-secondary); margin: 0; text-align: center; padding: 15px;">No hay biomarcadores cargados para este paciente todavía.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <script>
+            function enviarResumenHCWhatsApp(nombrePaciente) {
+                const texto = `¡Hola ${nombrePaciente}! Le escribimos desde el Sanatorio Le Blanc (Instituto Aeterna). Aquí le compartimos el resumen de su expediente clínico y analíticas recientes. Quedamos a su disposición.`;
+                window.open(`https://wa.me/?text=` + encodeURIComponent(texto), '_blank');
+            }
+            </script>
+
+        <!-- 3. EVOLUCIÓN SOAP MEJORADA -->
         {% elif seccion == 'evolucion_consulta' and p %}
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); width: auto;">← VOLVER A MI AGENDA</a>
@@ -400,7 +470,6 @@
             </div>
             
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
-                <!-- Columna Izquierda: Nota SOAP y Grabador -->
                 <div class="box" style="margin-bottom: 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">
                         <h3 style="color: var(--accent); font-size: 13px; text-transform: uppercase; margin: 0;">Evolución de Hoy & Consulta (Formato SOAP)</h3>
@@ -412,7 +481,6 @@
                     
                     <div class="form-group">
                         <label style="font-size: 11.5px; font-weight: bold; color: var(--text-secondary); margin-bottom: 6px; display: block;">Nota de Evolución / Dictado Clínico:</label>
-                        <!-- Textarea con expansión amplia al hacer clic (380px) y auto-crecimiento -->
                         <textarea id="soap_input" class="form-control" placeholder="Escriba la evolución clínica (S-O-A-P) o dicte por voz..." 
                                 style="height: 140px; min-height: 140px; transition: height 0.2s ease; resize: vertical; overflow-y: hidden;" 
                                 onfocus="expandirSoapMax(this)" 
@@ -425,26 +493,20 @@
                     </div>
                 </div>
 
-                <!-- Columna Derecha: Historial por Profesional y Fotos Antes/Después -->
                 <div style="display: flex; flex-direction: column; gap: 24px;">
-                    <!-- Historial de Consultas Anteriores -->
                     <div class="box" style="margin-bottom: 0;">
                         <h3 style="color: var(--accent); font-size: 13px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">Historial de Consultas Anteriores</h3>
                         
                         {% if historial_consultas %}
                             {% set medicos_agrupados = historial_consultas | groupby('medico') %}
                             {% for medico, consultas in medicos_agrupados %}
-                                <!-- Botón del Desplegable por Doctor -->
-                                <div class="doctor-accordion-header" onclick="toggleDoctorAcordeon('doc_{{ loop.index }}')" style="background: rgba(128, 0, 32, 0.05); border: 1px solid rgba(128, 0, 32, 0.2); padding: 12px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--accent); display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div class="doctor-accordion-header" onclick="toggleDoctorAcordeon('doc_{{ loop.index }}')">
                                     <span>👨‍⚕️ {{ medico }} ({{ consultas|length }} consultas)</span>
                                     <span>▼</span>
                                 </div>
-                                
-                                <!-- Contenido del Desplegable (Fechas y Evoluciones) -->
-                                <div id="doc_{{ loop.index }}" class="doctor-consultas-list" style="display: none; padding-left: 15px; margin-bottom: 15px; border-left: 2px solid var(--accent);">
-                                    <!-- Usamos reverse para ver primero la consulta más reciente de ese doctor -->
+                                <div id="doc_{{ loop.index }}" class="doctor-consultas-list">
                                     {% for c in consultas|reverse %}
-                                        <div class="consulta-item" style="background: var(--bg-main); border: 1px solid var(--border); padding: 10px 14px; border-radius: 6px; margin-bottom: 8px;">
+                                        <div class="consulta-item">
                                             <div style="border-bottom: 1px solid var(--border); padding-bottom: 5px; margin-bottom: 8px;">
                                                 <b style="color: var(--accent); font-size: 12px;">📅 Fecha: {{ c.fecha }}</b>
                                             </div>
@@ -460,7 +522,6 @@
                         {% endif %}
                     </div>
 
-                    <!-- Módulo de Fotos: Antes y Después -->
                     <div class="box" style="margin-bottom: 0;">
                         <h3 style="color: var(--accent); font-size: 13px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">Galería Clínica: Antes y Después</h3>
                         
@@ -477,7 +538,6 @@
                         </form>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                            <!-- Tarjeta ANTES -->
                             <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 12px; border-radius: 6px; text-align: center;">
                                 <span style="font-size: 11px; font-weight: bold; color: var(--text-secondary); display: block; margin-bottom: 8px; text-transform: uppercase;">Estado: Antes</span>
                                 {% set foto_antes = fotos_clinicas | selectattr('tipo', 'equalto', 'antes') | list | last %}
@@ -493,7 +553,6 @@
                                 {% endif %}
                             </div>
 
-                            <!-- Tarjeta DESPUÉS -->
                             <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 12px; border-radius: 6px; text-align: center;">
                                 <span style="font-size: 11px; font-weight: bold; color: var(--success); display: block; margin-bottom: 8px; text-transform: uppercase;">Estado: Después</span>
                                 {% set foto_despues = fotos_clinicas | selectattr('tipo', 'equalto', 'despues') | list | last %}
@@ -513,7 +572,7 @@
                 </div>
             </div>
 
-        <!-- 3. EXÁMENES LABORATORIALES -->
+        <!-- 4. EXÁMENES LABORATORIALES -->
         {% elif seccion == 'examenes_lab' and p %}
             <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start;">
                 <div class="box" style="margin-bottom: 0;">
@@ -555,7 +614,6 @@
                 </div>
             </div>
 
-            <!-- CARGA INTELIGENTE DE LABORATORIOS (IA VISUAL) -->
             <div class="box" style="margin-top: 25px; border: 1px solid var(--success); background: rgba(5, 150, 105, 0.02);">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">
                     <h3 style="color: var(--success); font-size: 13.5px; text-transform: uppercase; margin: 0;">🧠 Análisis Inteligente de Laboratorios (Visión IA)</h3>
@@ -574,7 +632,6 @@
                 </form>
             </div>
 
-            <!-- RESULTADOS DE LA IA (DESPLEGABLES / ACORDEÓN) -->
             <div class="box" style="margin-top: 25px;">
                 <h3 style="color: var(--accent); font-size: 13px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">Exámenes Laboratoriales — Análisis y Dictamen IA</h3>
                 
@@ -597,7 +654,6 @@
                                 <a href="/uploads/lab_{{ p.id }}_{{ est.origen.split('_')[-1] if '_' in est.origen else est.origen }}" target="_blank" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); padding: 5px 10px; font-size: 10.5px; text-decoration: none;">🔍 Ver Documento Original</a>
                                 {% endif %}
                                 
-                                <!-- Botón pequeño para eliminar el estudio -->
                                 <form action="/api/medico/eliminar-examen-lab/{{ est.id }}?token={{ token }}" method="POST" style="margin: 0;" onsubmit="return confirm('¿Desea eliminar este estudio de laboratorio?');">
                                     <input type="hidden" name="id_paciente" value="{{ p.id }}">
                                     <button type="submit" class="btn" style="background: rgba(220, 38, 38, 0.1); color: #dc2626; border: 1px solid rgba(220, 38, 38, 0.3); padding: 5px 10px; font-size: 10px;">🗑️ Eliminar</button>
@@ -629,7 +685,6 @@
                 {% endif %}
             </div>
 
-            <!-- Gráficos Históricos Dinámicos para Todos los Biomarcadores -->
             <div class="box" style="margin-top: 25px;">
                 <h3 style="color: var(--accent); font-size: 13.5px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">
                     Análisis Longitudinal: Tendencias y Números Históricos (Todos los Biomarcadores)
@@ -887,7 +942,6 @@
                 </form>
             </div>
 
-            <!-- PANEL DE SINCRONIZACIÓN MASIVA DE SALUD MÓVIL -->
             <div class="box" style="border: 1px solid var(--success); background: rgba(5, 150, 105, 0.02);">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">
                     <h3 style="color: var(--success); font-size: 13.5px; text-transform: uppercase; margin: 0;">📊 Panel de Sincronización Masiva (Salud Móvil / Wearables)</h3>
@@ -932,8 +986,6 @@
                     alert('Por favor ingrese al menos un dato biométrico.');
                     return;
                 }
-
-                const paqueteTexto = `• Pasos: ${pasos || 'N/A'}\n• Sueño: ${sueno || 'N/A'}\n• HRV/FC: ${hrv || 'N/A'}\n• Entrenamientos: ${workouts || 'N/A'}`;
 
                 fetch('/api/paciente/sincronizar-salud-movil', {
                     method: 'POST',
@@ -989,7 +1041,6 @@
 
     <!-- SCRIPT DE CONTROL UNIFICADO -->
     <script>
-        // Función para expandir automáticamente los textareas según el contenido
         function ajustarAltura(el) {
             el.style.height = 'auto';
             el.style.height = (el.scrollHeight) + 'px';
@@ -1024,7 +1075,6 @@
 
         function guardarNotaLibre(id) {
             const nota = document.getElementById('nota_libre_input').value;
-            // AQUI ESTA EL CAMBIO: agregamos ?token={{ token }}
             fetch('/api/medico/guardar-nota-libre?token={{ token }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1041,7 +1091,6 @@
                 return;
             }
 
-            // AQUI ESTA EL CAMBIO: agregamos ?token={{ token }}
             fetch('/api/medico/guardar-evolucion-soap?token={{ token }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1068,20 +1117,6 @@
             if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
         }
 
-        function toggleExpandirIA(idContenedor, btn) {
-            const el = document.getElementById(idContenedor);
-            if (!el) return;
-            if (el.style.maxHeight === 'none' || el.style.maxHeight === '') {
-                el.style.maxHeight = '140px';
-                el.style.overflow = 'hidden';
-                btn.innerText = '📖 Ver Transcripción Completa';
-            } else {
-                el.style.maxHeight = 'none';
-                el.style.overflow = 'visible';
-                btn.innerText = '📖 Ocultar / Contraer';
-            }
-        }
-
         function toggleChatFlotante() {
             const panel = document.getElementById('chat-panel');
             if (panel) {
@@ -1100,7 +1135,6 @@
             input.value = '';
             chatBody.scrollTop = chatBody.scrollHeight;
 
-            // AQUI ESTA EL CAMBIO: agregamos ?token={{ token }}
             fetch('/api/medico/asistente-ia?token={{ token }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1119,7 +1153,6 @@
             });
         }
 
-        // FUNCIONES DE EXPANSIÓN AMPLIA PARA EL TEXTAREA SOAP AL HACER CLIC
         function expandirSoapMax(el) {
             if (el.value.trim() === '') {
                 el.style.height = '380px';
@@ -1139,7 +1172,6 @@
             }
         }
 
-        // FUNCIÓN PARA AGREGAR FILAS DINÁMICAS EN MEDICINA REGENERATIVA
         let contadorSesiones = document.querySelectorAll('#sesiones-tbody tr').length || 1;
 
         function agregarFilaSesion() {
@@ -1162,7 +1194,6 @@
             tbody.appendChild(tr);
         }
 
-        // GRABADOR / DICTADO DE VOZ SOAP
         let reconocimientoVoz = null;
         let estaDictando = false;
 
