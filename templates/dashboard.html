@@ -111,8 +111,8 @@
             <a href="/?token={{ token }}&rol=medico&seccion=annovator&id={{ p.id }}" class="{% if seccion == 'annovator' %}active{% endif %}">Protocolo Annovator</a>
             <a href="/?token={{ token }}&rol=medico&seccion=wearables&id={{ p.id }}" class="{% if seccion == 'wearables' %}active{% endif %}">Wearables y Biometría</a>
             <a href="/?token={{ token }}&rol=medico&seccion=consentimientos&id={{ p.id }}" class="{% if seccion == 'consentimientos' %}active{% endif %}">Consentimientos</a>
-            <!-- NUEVA SECCIÓN DE REPORTE CLÍNICO EN LA HISTORIA CLÍNICA -->
-            <a href="/?token={{ token }}&rol=medico&seccion=reporte_hc&id={{ p.id }}" class="{% if seccion == 'reporte_hc' %}active{% endif %}">📊 Reporte Clínico y Gráficos HC</a>
+            <!-- CAMBIADO A PORTAL DE PACIENTE -->
+            <a href="/?token={{ token }}&rol=medico&seccion=reporte_hc&id={{ p.id }}" class="{% if seccion == 'reporte_hc' %}active{% endif %}">📁 Portal de Paciente</a>
             {% endif %}
         {% endif %}
     </div>
@@ -391,11 +391,11 @@
                 {% endif %}
             </div>
 
-        <!-- 2. REPORTE CLÍNICO, ANALÍTICA Y GRÁFICOS HC (NUEVA SECCIÓN) -->
+        <!-- 2. PORTAL DE PACIENTE -->
         {% elif seccion == 'reporte_hc' and p %}
             <div class="box" style="border: 1px solid var(--accent);">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 20px;">
-                    <h3 style="margin: 0; color: var(--accent); text-transform: uppercase; font-size: 13.5px;">Resumen Clínico, Analítica y Gráficos — {{ p.nombre }}</h3>
+                    <h3 style="margin: 0; color: var(--accent); text-transform: uppercase; font-size: 13.5px;">Portal de Paciente — {{ p.nombre }}</h3>
                     <div style="display: flex; gap: 10px;">
                         <a href="/medico/reporte-paciente/{{ p.id }}?token={{ token }}" target="_blank" class="btn" style="background: var(--accent); padding: 8px 16px; font-size: 11px; text-decoration: none; color: #ffffff; text-align: center;">🖨️ Ver Formato Imprimible (Membrete)</a>
                         <button type="button" class="btn" style="background: #25d366; color: white; padding: 8px 16px; font-size: 11px;" onclick="enviarResumenHCWhatsApp('{{ p.nombre }}')">💬 Enviar Resumen por WhatsApp</button>
