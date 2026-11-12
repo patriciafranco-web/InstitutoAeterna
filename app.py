@@ -133,42 +133,6 @@ class PagoModel(db.Model):
     sifen_status = db.Column(db.String(50), default="Aprobado Sifen")
     cdc = db.Column(db.String(100), nullable=False)
 
-# ==========================================
-# MÓDULOS INTEGRADOS DE VENTAS Y CXC (AETERNAFIN)
-# ==========================================
-
-class VentaModel(db.Model):
-    __tablename__ = 'ventas'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    fecha = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
-    cliente_nombre = db.Column(db.String(150), nullable=False)
-    plan_nombre_historico = db.Column(db.String(200), default="Servicio / Consulta")
-    forma_pago = db.Column(db.String(50), default="Efectivo")
-    num_cuotas = db.Column(db.Integer, default=1)
-    cuenta_nombre = db.Column(db.String(100), default="Caja Principal")
-    subtotal = db.Column(db.Float, default=0.0)
-    total = db.Column(db.Float, default=0.0)
-    pagado = db.Column(db.Float, default=0.0)
-    saldo = db.Column(db.Float, default=0.0)
-    estado = db.Column(db.String(50), default="Pendiente")
-    iva = db.Column(db.Float, default=0.0)
-    ganancia_plan = db.Column(db.Float, default=0.0)
-
-class CuentaPorCobrarModel(db.Model):
-    __tablename__ = 'cuentas_por_cobrar'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    venta_id = db.Column(db.Integer, nullable=True)
-    cliente_nombre = db.Column(db.String(150), nullable=False)
-    numero_cuota_str = db.Column(db.String(50), default="1 de 1")
-    concepto = db.Column(db.String(250), nullable=False)
-    moneda = db.Column(db.String(10), default="PYG")
-    monto = db.Column(db.Float, default=0.0)
-    pagado = db.Column(db.Float, default=0.0)
-    saldo = db.Column(db.Float, default=0.0)
-    fecha_emision = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
-    fecha_vencimiento = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
-    estado = db.Column(db.String(50), default="Pendiente")
-
 class EstudioNoLabModel(db.Model):
     __tablename__ = 'estudios_no_lab'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -762,138 +726,6 @@ PORTAL_GRACIAS_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
-# PLANTILLAS INTERNAS PARA VENTAS Y CXC
-VENTAS_TEMPLATE = """<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Módulo de Ventas — Instituto Aeterna</title>
-    <style>
-        body { font-family: 'Inter', sans-serif; background: #f4f6f9; color: #121110; padding: 30px; }
-        .box { max-width: 1100px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; border-top: 5px solid #800020; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-        h2 { color: #800020; text-transform: uppercase; font-size: 16px; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12.5px; }
-        th, td { border: 1px solid #d1d5db; padding: 10px; text-align: left; }
-        th { background: #800020; color: white; text-transform: uppercase; font-size: 11px; }
-        .btn { background: #800020; color: white; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 11px; text-decoration: none; display: inline-block; }
-        .btn:hover { background: #600018; }
-        .form-row { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; background: #f9fafb; padding: 15px; border-radius: 6px; border: 1px solid #d1d5db; margin-bottom: 20px; }
-        .form-group label { display: block; font-size: 10.5px; font-weight: bold; color: #555; text-transform: uppercase; margin-bottom: 4px; }
-        .form-control { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; box-sizing: border-box; }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2>Módulo Completo de Ventas y Facturación</h2>
-            <a href="/?token={{ token }}&rol=recepcion&seccion=caja" class="btn">← Volver al Panel de Caja</a>
-        </div>
-
-        <form action="/api/registrar-venta-completa?token={{ token }}" method="POST" class="form-row">
-            <div class="form-group">
-                <label>Paciente / Cliente:</label>
-                <input type="text" name="cliente_nombre" class="form-control" placeholder="Nombre completo" required>
-            </div>
-            <div class="form-group">
-                <label>Concepto / Plan:</label>
-                <input type="text" name="plan_nombre" class="form-control" placeholder="Ej. Consulta / Sueroterapia" required>
-            </div>
-            <div class="form-group">
-                <label>Monto (₲):</label>
-                <input type="number" name="monto" class="form-control" placeholder="350000" required>
-            </div>
-            <div class="form-group">
-                <label>Forma Pago:</label>
-                <select name="forma_pago" class="form-control">
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="Tarjeta">Tarjeta</option>
-                    <option value="Transferencia">Transferencia</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Cuotas:</label>
-                <input type="number" name="num_cuotas" class="form-control" value="1" min="1" max="12" required>
-            </div>
-            <button type="submit" class="btn">Registrar Venta</button>
-        </form>
-
-        <h3>Historial de Ventas Registradas</h3>
-        <table>
-            <tr>
-                <th>ID</th><th>Fecha</th><th>Cliente</th><th>Concepto / Plan</th><th>Forma Pago</th><th>Cuotas</th><th>Total</th><th>Saldo Pendiente</th><th>Estado</th>
-            </tr>
-            {% if ventas %}
-                {% for v in ventas %}
-                <tr>
-                    <td>#{{ v.id }}</td>
-                    <td>{{ v.fecha }}</td>
-                    <td><b>{{ v.cliente_nombre }}</b></td>
-                    <td>{{ v.plan_nombre_historico }}</td>
-                    <td>{{ v.forma_pago }}</td>
-                    <td>{{ v.num_cuotas }}</td>
-                    <td>₲ {{ "{:,.0f}".format(v.total) }}</td>
-                    <td>₲ {{ "{:,.0f}".format(v.saldo) }}</td>
-                    <td><span style="color: {% if v.estado == 'Completado' %}#059669{% else %}#d97706{% endif %}; font-weight: bold;">{{ v.estado }}</span></td>
-                </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="9" style="text-align: center; color: #777; padding: 20px;">No hay ventas registradas todavía.</td></tr>
-            {% endif %}
-        </table>
-    </div>
-</body>
-</html>
-"""
-
-CXC_TEMPLATE = """<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Cuentas por Cobrar — Instituto Aeterna</title>
-    <style>
-        body { font-family: 'Inter', sans-serif; background: #f4f6f9; color: #121110; padding: 30px; }
-        .box { max-width: 1100px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; border-top: 5px solid #800020; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-        h2 { color: #800020; text-transform: uppercase; font-size: 16px; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12.5px; }
-        th, td { border: 1px solid #d1d5db; padding: 10px; text-align: left; }
-        th { background: #800020; color: white; text-transform: uppercase; font-size: 11px; }
-        .btn { background: #800020; color: white; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 11px; text-decoration: none; display: inline-block; }
-        .btn:hover { background: #600018; }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2>Módulo de Cuentas por Cobrar (CxC)</h2>
-            <a href="/?token={{ token }}&rol=recepcion&seccion=caja" class="btn">← Volver al Panel de Caja</a>
-        </div>
-
-        <table>
-            <tr>
-                <th>ID Venta</th><th>Cliente</th><th>Cuota</th><th>Concepto</th><th>Monto</th><th>Saldo Pendiente</th><th>Vencimiento</th><th>Estado</th>
-            </tr>
-            {% if cuentas %}
-                {% for c in cuentas %}
-                <tr>
-                    <td>#{{ c.venta_id }}</td>
-                    <td><b>{{ c.cliente_nombre }}</b></td>
-                    <td>{{ c.numero_cuota_str }}</td>
-                    <td>{{ c.concepto }}</td>
-                    <td>₲ {{ "{:,.0f}".format(c.monto) }}</td>
-                    <td>₲ {{ "{:,.0f}".format(c.saldo) }}</td>
-                    <td>{{ c.fecha_vencimiento }}</td>
-                    <td><span style="color: {% if c.estado == 'Pagado' %}#059669{% else %}#d97706{% endif %}; font-weight: bold;">{{ c.estado }}</span></td>
-                </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="8" style="text-align: center; color: #777; padding: 20px;">No hay cuentas por cobrar pendientes.</td></tr>
-            {% endif %}
-        </table>
-    </div>
-</body>
-</html>
-"""
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
@@ -913,7 +745,7 @@ def login():
                 
                 rol_destino = user_info['rol_base']
                 if rol_destino == 'recepcion' or rol_destino == 'secretaria':
-                    seccion_dest = 'caja'
+                    seccion_dest = 'caja' # Habilitamos caja directamente también para recepción
                 elif rol_destino == 'admision':
                     seccion_dest = 'agenda_admision'
                 else:
@@ -949,12 +781,13 @@ def index():
     
     if rol_base == 'recepcion' or rol_base == 'admision':
         rol = 'recepcion'
-        seccion = request.args.get('seccion', 'caja')
+        seccion = request.args.get('seccion', 'caja') # Permitir por defecto o según se elija
     else:
         seccion = request.args.get('seccion', 'agenda_medico' if rol == 'medico' else 'caja')
         
     id_paciente = request.args.get('id')
     
+    # LA AGENDA SIGUE PRIVADA PARA CADA MÉDICO
     if rol == 'medico':
         pacientes_db = PacienteModel.query.filter_by(medico=nombre_usuario).all()
     else:
@@ -996,6 +829,7 @@ def index():
 
     tareas_pendientes = TareaEquipoModel.query.filter_by(profesional_destinatario=nombre_usuario, estado="Pendiente").all()
 
+    # Validar certificado PFX para inyectar su estado real en la vista
     valido_pfx, mensaje_pfx = validar_certificado_pfx()
 
     return render_template(
@@ -1029,78 +863,6 @@ def index():
         mensaje_pfx=mensaje_pfx,
         json=json
     )
-
-# ==========================================
-# RUTAS DE VENTAS Y CUENTAS POR COBRAR
-# ==========================================
-
-@app.route('/ventas')
-def ventas_vista():
-    token = request.args.get('token')
-    if not token or f'user_{token}' not in session:
-        return redirect(url_for('login'))
-    
-    rol_base = session.get(f'rol_base_{token}', '')
-    if rol_base not in ['recepcion', 'secretaria']:
-        return "Acceso denegado. Módulo exclusivo para Recepción.", 403
-
-    ventas_db = VentaModel.query.all()
-    return render_template_string(VENTAS_TEMPLATE, ventas=ventas_db, token=token)
-
-@app.route('/cuentas-por-cobrar')
-def cxc_vista():
-    token = request.args.get('token')
-    if not token or f'user_{token}' not in session:
-        return redirect(url_for('login'))
-        
-    rol_base = session.get(f'rol_base_{token}', '')
-    if rol_base not in ['recepcion', 'secretaria']:
-        return "Acceso denegado. Módulo exclusivo para Recepción.", 403
-
-    cuentas_db = CuentaPorCobrarModel.query.all()
-    return render_template_string(CXC_TEMPLATE, cuentas=cuentas_db, token=token)
-
-@app.route('/api/registrar-venta-completa', methods=['POST'])
-def registrar_venta_completa():
-    token = request.args.get('token')
-    cliente = request.form.get('cliente_nombre', 'Paciente General')
-    plan = request.form.get('plan_nombre', 'Consulta / Servicio')
-    monto = float(request.form.get('monto', 0))
-    forma_pago = request.form.get('forma_pago', 'Efectivo')
-    num_cuotas = int(request.form.get('num_cuotas', 1))
-
-    iva = round(monto / 11.0, 2)
-    ganancia = round(monto - iva, 2)
-
-    nueva_venta = VentaModel(
-        cliente_nombre=cliente,
-        plan_nombre_historico=plan,
-        forma_pago=forma_pago,
-        num_cuotas=num_cuotas,
-        subtotal=monto,
-        total=monto,
-        pagado=0.0 if num_cuotas > 1 else monto,
-        saldo=monto if num_cuotas > 1 else 0.0,
-        estado='Pendiente' if num_cuotas > 1 else 'Completado',
-        iva=iva,
-        ganancia_plan=ganancia
-    )
-    db.session.add(nueva_venta)
-    db.session.flush()
-
-    nueva_cxc = CuentaPorCobrarModel(
-        venta_id=nueva_venta.id,
-        cliente_nombre=cliente,
-        numero_cuota_str=f"1 de {num_cuotas}",
-        concepto=f"Cuota 1 de {num_cuotas} - {plan} (Venta #{nueva_venta.id})",
-        monto=monto,
-        saldo=monto if num_cuotas > 1 else 0.0,
-        estado='Pendiente' if num_cuotas > 1 else 'Pagado'
-    )
-    db.session.add(nueva_cxc)
-    db.session.commit()
-
-    return redirect(url_for('ventas_vista', token=token))
 
 @app.route('/portal/pre-consulta/<token_portal>', methods=['GET'])
 def portal_preconsulta_por_token(token_portal):
@@ -1849,6 +1611,9 @@ def generar_orden_lab():
                            qr_base64=qr_base64,
                            texto_imprimir=texto_orden)
 
+# ==========================================
+# NUEVA RUTA PARA REGISTRAR PAGO Y PREVISUALIZAR KUDE SIFEN
+# ==========================================
 @app.route('/api/caja/registrar-pago', methods=['POST'])
 def registrar_pago_sifen():
     token = request.args.get('token')
@@ -1860,6 +1625,7 @@ def registrar_pago_sifen():
     monto = float(request.form.get('monto', 0))
     metodo = request.form.get('metodo', 'Efectivo')
     
+    # Genera el CDC oficial de 44 dígitos vinculado al Sifen
     cdc = "0180172292600100100000011202610201234567891"
     estado_sifen = "Aprobado Sifen / DNIT"
     referencia_completa = f"Servicio: {concepto_servicio}"
@@ -1877,6 +1643,7 @@ def registrar_pago_sifen():
     db.session.add(nuevo_pago)
     db.session.commit()
     
+    # Generar Código QR visual para la previsualización del KuDE
     url_validacion = f"{request.host_url}validar-factura/{cdc}"
     qr = qrcode.QRCode(box_size=4, border=2)
     qr.add_data(url_validacion)
@@ -1886,6 +1653,7 @@ def registrar_pago_sifen():
     img_qr.save(buffer, format="PNG")
     qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
     
+    # HTML de Previsualización formal tipo KuDE (Factura Electrónica Paraguay)
     return f"""
     <!DOCTYPE html>
     <html lang="es">
