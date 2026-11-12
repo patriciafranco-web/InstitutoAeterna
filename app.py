@@ -1769,7 +1769,7 @@ def registrar_pago_sifen():
     if token_mifactu:
         # 2. Armar el cuerpo de la factura según la Guía de Integración de MiFactu (Opción A - Conector)
         payload_factura = {
-            "tipope": "1",
+            "tipope": 1,
             "iTiDE": 1,
             "dEst": "001",
             "dPunExp": "001",
