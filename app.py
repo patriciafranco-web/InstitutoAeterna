@@ -1,36 +1,32 @@
-from flask import Flask, render_template, render_template_string, request, jsonify, Response, session, redirect, url_for, send_from_directory
+from flask import Flask, render_template, render_template_string, request, jsonify, Response, session, redirect, url_for, send_from_directory, send_file
 from flask_sqlalchemy import SQLAlchemy
 import random
 import requests
 import os
 from dotenv import load_dotenv
 
-load_dotenv() # Esto carga las variables del archivo .env al sistema
+load_dotenv()
 import json
 import datetime
 import time
 import anthropic
-import re # Agregado para extraccion segura de JSON
+import re
 
-# Librerías para la Receta Electrónica (QR y UUID)
 import qrcode
 import io
 import base64
 import uuid
 
-# Librerías para Facturación Electrónica Sifen (.pfx)
 from cryptography.hazmat.primitives.serialization import pkcs12
 
 SIFEN_CERT_PASS = os.getenv('SIFEN_CERT_PASS', '')
 
 def cargar_certificado():
-    """Carga de forma segura el certificado .pfx codificado en Base64 desde Render o local"""
     rutas_b64 = [
         '/etc/secrets/certificado.b64',
         'certificado.b64',
         os.path.join(os.path.dirname(__file__), 'certificado.b64')
     ]
-    
     archivo_encontrado = None
     for r in rutas_b64:
         if r and os.path.exists(r):
@@ -38,7 +34,6 @@ def cargar_certificado():
             break
             
     if not archivo_encontrado:
-        # Respaldo si estuviera como .pfx directo binario
         if os.path.exists('/etc/secrets/certificado.pfx'):
             with open('/etc/secrets/certificado.pfx', 'rb') as f:
                 datos_bin = f.read()
@@ -49,25 +44,21 @@ def cargar_certificado():
                 datos_bin = f.read()
             password = SIFEN_CERT_PASS.strip().encode() if SIFEN_CERT_PASS else b''
             return pkcs12.load_key_and_certificates(datos_bin, password)
-        raise FileNotFoundError("No se encontró el archivo certificado.b64 ni certificado.pfx en el servidor.")
+        raise FileNotFoundError("No se encontró el archivo de certificado digital.")
 
     with open(archivo_encontrado, "r") as f:
         contenido = f.read().strip()
-        
     datos = base64.b64decode(contenido)
     password = SIFEN_CERT_PASS.strip().encode() if SIFEN_CERT_PASS else b''
     return pkcs12.load_key_and_certificates(datos, password)
 
 def validar_certificado_pfx():
-    """Valida de forma segura el certificado cargado"""
     try:
         private_key, certificate, additional_certificates = cargar_certificado()
-        subject = certificate.subject.rfc4514_string() if certificate else "Certificado Válido"
-        return True, f"Certificado digital Sifen cargado y verificado correctamente."
+        return True, "Certificado digital Sifen cargado y verificado correctamente."
     except Exception as e:
-        return False, f"Error al abrir el certificado (contraseña incorrecta o archivo corrupto): {str(e)}"
+        return False, f"Error al abrir el certificado: {str(e)}"
 
-# 1. CONEXIÓN DEFINITIVA A ANTHROPIC
 client = anthropic.Anthropic()
 
 app = Flask(__name__)
@@ -82,12 +73,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-FINANZAS_API_URL = "https://finanzas1.onrender.com/api/v1/registrar-transaccion"
-
-# ==========================================
-# MODELOS DE BASE DE DATOS (PERSISTENCIA TOTAL)
-# ==========================================
-
+# MODELOS DE BASE DE DATOS
 class PacienteModel(db.Model):
     __tablename__ = 'pacientes'
     id = db.Column(db.String(50), primary_key=True)
@@ -117,7 +103,7 @@ class FotoClinicaModel(db.Model):
     __tablename__ = 'fotos_clinicas'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     id_paciente = db.Column(db.String(50), nullable=False)
-    tipo = db.Column(db.String(20), nullable=False) # 'antes' o 'despues'
+    tipo = db.Column(db.String(20), nullable=False)
     filename = db.Column(db.String(255), nullable=False)
     fecha = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
 
@@ -132,6 +118,9 @@ class PagoModel(db.Model):
     fecha = db.Column(db.String(50), default="2026-10-20")
     sifen_status = db.Column(db.String(50), default="Aprobado Sifen")
     cdc = db.Column(db.String(100), nullable=False)
+    establecimiento = db.Column(db.String(3), default="001")
+    punto_expedicion = db.Column(db.String(3), default="001")
+    numero_documento = db.Column(db.String(7), default="0000001")
 
 class EstudioNoLabModel(db.Model):
     __tablename__ = 'estudios_no_lab'
@@ -262,49 +251,16 @@ LABORATORIOS_AETERNA = {
 }
 
 USUARIOS_DB = {
-    "pedro.calabrese": {
-        "pass": "aeterna2026", "pass_admin": "caja2026",
-        "nombre": "Dr. Pedro Calabrese", "rol_base": "medico", "es_socio": True,
-        "especialidad": "Traumatología y Ortopedia (Socio)"
-    },
-    "fatima.lopez": {
-        "pass": "aeterna2026", "pass_admin": "caja2026",
-        "nombre": "Dra. Fátima López", "rol_base": "medico", "es_socio": True,
-        "especialidad": "Traumatología y Ortopedia (Socio)"
-    },
-    "romina.espinola": {
-        "pass": "aeterna2026", "pass_admin": "caja2026",
-        "nombre": "Dra. Romina Espinola", "rol_base": "medico", "es_socio": True,
-        "especialidad": "Medicina Familiar - Pos Endocrinología (Socio)"
-    },
-    "ximena.ruiz": {
-        "pass": "aeterna2026", "nombre": "Lic. Ximena Ruiz", "rol_base": "medico", "es_socio": False,
-        "especialidad": "Nutricionista Clínica & Longevidad"
-    },
-    "alfredo.estigarribia": {
-        "pass": "aeterna2026", "nombre": "Dr. Alfredo Estigarribia", "rol_base": "medico", "es_socio": False,
-        "especialidad": "Odontología del Sueño"
-    },
-    "manuel.duarte": {
-        "pass": "aeterna2026", "nombre": "Manuel Duarte", "rol_base": "entrenador", "es_socio": False,
-        "especialidad": "Preparador Físico / Performance Coach"
-    },
-    "nadia.bortolace": {
-        "pass": "caja2026", "nombre": "Nadia Bortolace", "rol_base": "secretaria", "es_socio": False,
-        "especialidad": "Gestión Financiera & Facturación Sifen"
-    },
-    "daiana.gomez": {
-        "pass": "caja2026", "nombre": "Daiana Gomez", "rol_base": "secretaria", "es_socio": False,
-        "especialidad": "Gestión Financiera & Facturación Sifen"
-    },
-    "buro": {
-        "pass": "admin2026", "nombre": "Buró (Administración / Contabilidad)", "rol_base": "secretaria", "es_socio": False,
-        "especialidad": "Administración General & Facturación Sifen"
-    },
-    "recepcion": {
-        "pass": "recepcion2026", "nombre": "Admisión / Recepción", "rol_base": "recepcion", "es_socio": False,
-        "especialidad": "Gestión de Caja y Ventas"
-    }
+    "pedro.calabrese": {"pass": "aeterna2026", "pass_admin": "caja2026", "nombre": "Dr. Pedro Calabrese", "rol_base": "medico", "es_socio": True},
+    "fatima.lopez": {"pass": "aeterna2026", "pass_admin": "caja2026", "nombre": "Dra. Fátima López", "rol_base": "medico", "es_socio": True},
+    "romina.espinola": {"pass": "aeterna2026", "pass_admin": "caja2026", "nombre": "Dra. Romina Espinola", "rol_base": "medico", "es_socio": True},
+    "ximena.ruiz": {"pass": "aeterna2026", "nombre": "Lic. Ximena Ruiz", "rol_base": "medico", "es_socio": False},
+    "alfredo.estigarribia": {"pass": "aeterna2026", "nombre": "Dr. Alfredo Estigarribia", "rol_base": "medico", "es_socio": False},
+    "manuel.duarte": {"pass": "aeterna2026", "nombre": "Manuel Duarte", "rol_base": "entrenador", "es_socio": False},
+    "nadia.bortolace": {"pass": "caja2026", "nombre": "Nadia Bortolace", "rol_base": "secretaria", "es_socio": False},
+    "daiana.gomez": {"pass": "caja2026", "nombre": "Daiana Gomez", "rol_base": "secretaria", "es_socio": False},
+    "buro": {"pass": "admin2026", "nombre": "Buró (Administración / Contabilidad)", "rol_base": "secretaria", "es_socio": False},
+    "recepcion": {"pass": "recepcion2026", "nombre": "Admisión / Recepción", "rol_base": "recepcion", "es_socio": False}
 }
 
 LOGIN_TEMPLATE = """<!DOCTYPE html>
@@ -606,7 +562,6 @@ PORTAL_PRECONSULTA_TEMPLATE = """<!DOCTYPE html>
                 </select>
             </div>
 
-            <!-- Sincronización Automática Integral de Dispositivo -->
             <div style="background: rgba(5, 150, 105, 0.04); border: 1px solid #059669; padding: 16px; border-radius: 6px; margin-top: 20px; margin-bottom: 20px;">
                 <h4 style="color: #059669; margin-top: 0; font-size: 13px; text-transform: uppercase;">⌚ Sincronización Completa de Salud y Wearables</h4>
                 <p style="font-size: 11.5px; color: #555; margin-bottom: 12px;">Permita la lectura masiva de sus métricas (pasos, sueño profundo, HRV, frecuencia cardíaca y entrenamientos) para integrarlas automáticamente a su expediente en Aeterna.</p>
@@ -1351,9 +1306,6 @@ def ver_archivo_subido(filename):
         return redirect(url_for('login'))
     return send_from_directory('uploads', filename)
 
-# ==========================================
-# RUTAS DE RECETA ELECTRÓNICA Y QR
-# ==========================================
 @app.route('/medico/imprimir-receta/<id_paciente>')
 def imprimir_receta(id_paciente):
     token = request.args.get('token')
@@ -1489,7 +1441,6 @@ def carga_inteligente_lab():
             )
 
         dictamen_ia = "".join(b.text for b in response.content if b.type == "text")
-        
         dictamen_visual = re.sub(r'```json\s*.*?\s*```', '', dictamen_ia, flags=re.DOTALL).strip()
 
     except Exception as e:
@@ -1609,9 +1560,6 @@ def generar_orden_lab():
                            qr_base64=qr_base64,
                            texto_imprimir=texto_orden)
 
-# ==========================================
-# RUTA DE REPORTE CLÍNICO IMPRIMIBLE DESDE EL MÉDICO
-# ==========================================
 @app.route('/medico/reporte-paciente/<string:id_paciente>')
 def reporte_paciente(id_paciente):
     token = request.args.get('token')
@@ -1728,26 +1676,16 @@ MIFACTU_RUC = os.getenv('MIFACTU_RUC', '80172292')
 MIFACTU_PASSWORD = os.getenv('MIFACTU_PASSWORD', '801722926')
 
 def obtener_token_mifactu():
-    """Autentica contra la API de MiFactu y devuelve el token Bearer (Capítulo 2.2 de la guía)"""
     try:
         url = f"{MIFACTU_BASE_URL.rstrip('/')}/api/authenticate"
-        payload = {
-            "ruc": MIFACTU_RUC,
-            "password": MIFACTU_PASSWORD
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        payload = {"ruc": MIFACTU_RUC, "password": MIFACTU_PASSWORD}
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         if response.status_code == 200:
             return response.json().get("token")
-        else:
-            print("Error de autenticación en MiFactu:", response.text)
-            return None
     except Exception as e:
         print("Excepción al conectar con MiFactu:", str(e))
-        return None
+    return None
 
 @app.route('/api/caja/registrar-pago', methods=['POST'])
 def registrar_pago_sifen():
@@ -1761,9 +1699,7 @@ def registrar_pago_sifen():
     monto = float(request.form.get('monto', 0))
     metodo = request.form.get('metodo', 'Efectivo')
     
-    # Determinar si es contribuyente (si tiene RUC con guion) o no contribuyente / consumidor final
     i_nat_rec = 1 if "-" in ruc_cliente else 2
-    
     if "-" in ruc_cliente:
         partes = ruc_cliente.split("-")
         ruc_limpio = partes[0].strip()
@@ -1773,19 +1709,21 @@ def registrar_pago_sifen():
         dv_limpio = ""
         num_id_limpio = ruc_cliente if ruc_cliente else "0"
 
-    # 1. Obtener token dinámico de la API de MiFactu
     token_mifactu = obtener_token_mifactu()
-    
     cdc_generado = "0180172292600100100000011202610201234567891"
     estado_sifen = "Registrado localmente (Sin respuesta de API)"
+    
+    num_doc_aleatorio = f"{random.randint(1, 9999999):07d}"
+    establecimiento = "001"
+    punto_expedicion = "001"
 
     if token_mifactu:
-        # 2. Armar el cuerpo de la factura según la Guía de Integración de MiFactu (Opción A - Conector)
         payload_factura = {
             "tipope": 1,
             "iTiDE": 1,
-            "dEst": "001",
-            "dPunExp": "001",
+            "dEst": establecimiento,
+            "dPunExp": punto_expedicion,
+            "dNumDoc": num_doc_aleatorio,
             "dFeEmiDE": datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
             "iTipTra": 1,
             "cMoneOpe": "PYG",
@@ -1817,7 +1755,6 @@ def registrar_pago_sifen():
             ]
         }
 
-        # Asignar campos específicos según la naturaleza del receptor
         if i_nat_rec == 1:
             payload_factura["dRucRec"] = ruc_limpio
             payload_factura["dDVRec"] = dv_limpio
@@ -1835,13 +1772,26 @@ def registrar_pago_sifen():
             
             if res_mifactu.status_code == 200 and resultado_json.get("status") == "success":
                 cdc_generado = resultado_json.get("CDC", cdc_generado)
-                estado_sifen = "Aprobado Sifen / MiFactu"
+                
+                # Consultar estado real (Capítulo 8 - tipope: 2)
+                payload_consulta = {
+                    "tipope": "2",
+                    "dEst": establecimiento,
+                    "dPunExp": punto_expedicion,
+                    "dNumDoc": num_doc_aleatorio,
+                    "tipoDoc": "FE"
+                }
+                res_consulta = requests.post(f"{MIFACTU_BASE_URL.rstrip('/')}/api/operation", json=payload_consulta, headers=headers_mifactu, timeout=10)
+                if res_consulta.status_code == 200:
+                    data_estado = res_consulta.json().get("response", {})
+                    estado_sifen = data_estado.get("Estado", "Aprobado Sifen / MiFactu")
+                else:
+                    estado_sifen = "Aprobado (En proceso Sifen)"
             else:
                 estado_sifen = f"Rechazado: {resultado_json.get('message', 'Error de validación')}"
         except Exception as api_err:
             estado_sifen = f"Error de red API: {str(api_err)}"
 
-    # 3. Guardar transacción localmente
     nuevo_pago = PagoModel(
         paciente=f"{paciente_nombre} ({ruc_cliente if ruc_cliente else 'Innominado'})",
         monto=monto,
@@ -1850,82 +1800,71 @@ def registrar_pago_sifen():
         estado="Completado",
         fecha=datetime.date.today().strftime('%d/%m/%Y'),
         sifen_status=estado_sifen,
-        cdc=cdc_generado
+        cdc=cdc_generado,
+        establecimiento=establecimiento,
+        punto_expedicion=punto_expedicion,
+        numero_documento=num_doc_aleatorio
     )
     db.session.add(nuevo_pago)
     db.session.commit()
     
-    # Generar QR para el KuDE visual
-    url_validacion = f"{request.host_url}validar-factura/{cdc_generado}"
-    qr = qrcode.QRCode(box_size=4, border=2)
-    qr.add_data(url_validacion)
-    qr.make(fit=True)
-    img_qr = qr.make_image(fill_color="black", back_color="white")
-    buffer = io.BytesIO()
-    img_qr.save(buffer, format="PNG")
-    qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    # Redirige de inmediato a descargar el PDF/KuDE oficial de MiFactu (Capítulo 9 - tipope: 4)
+    return redirect(url_for('descargar_kude_oficial', pago_id=nuevo_pago.id, token=token))
+
+@app.route('/api/caja/descargar-kude/<int:pago_id>', methods=['GET'])
+def descargar_kude_oficial(pago_id):
+    token = request.args.get('token')
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
+        
+    pago = PagoModel.query.get_or_404(pago_id)
+    token_mifactu = obtener_token_mifactu()
     
-    return f"""
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-        <meta charset="UTF-8">
-        <title>Factura Electrónica Sifen — Aeterna</title>
-        <style>
-            body {{ font-family: 'Inter', sans-serif; background: #f4f6f9; color: #121110; padding: 30px; }}
-            .kude-box {{ max-width: 650px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; border-top: 6px solid #800020; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
-            h2 {{ color: #800020; text-align: center; text-transform: uppercase; font-size: 16px; margin-bottom: 5px; }}
-            .sub-header {{ text-align: center; font-size: 11.5px; color: #555; margin-bottom: 25px; line-height: 1.5; }}
-            .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; font-size: 12.5px; background: #f9fafb; padding: 15px; border-radius: 6px; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 20px; font-size: 12.5px; }}
-            th, td {{ border: 1px solid #d1d5db; padding: 10px; text-align: left; }}
-            th {{ background: #800020; color: white; text-transform: uppercase; font-size: 11px; }}
-            .total-row {{ font-weight: bold; text-align: right; font-size: 14px; color: #800020; }}
-            .cdc-section {{ text-align: center; background: #f4f6f9; padding: 12px; border-radius: 6px; margin-top: 20px; }}
-            .cdc-code {{ font-family: monospace; font-size: 12px; font-weight: bold; color: #333; word-break: break-all; }}
-            .btn-back {{ display: block; width: 100%; background: #800020; color: white; text-align: center; padding: 12px; border-radius: 6px; text-decoration: none; font-weight: bold; text-transform: uppercase; font-size: 12px; margin-top: 25px; box-sizing: border-box; }}
-        </style>
-    </head>
-    <body>
-        <div class="kude-box">
-            <h2>Instituto Aeterna E.A.S.</h2>
-            <div class="sub-header">
-                Sanatorio Le Blanc — Ciudad del Este, Paraguay<br>
-                <b>RUC:</b> 80172292-6<br>
-                <span style="color: #059669; font-weight: bold;">✔ Estado Sifen: {estado_sifen}</span>
+    pdf_base64 = None
+    if token_mifactu:
+        payload_kude = {
+            "tipope": "4",
+            "dEst": pago.establecimiento,
+            "dPunExp": pago.punto_expedicion,
+            "dNumDoc": pago.numero_documento,
+            "tipoDoc": "FE"
+        }
+        headers_mifactu = {
+            "Authorization": f"Bearer {token_mifactu}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        try:
+            res = requests.post(f"{MIFACTU_BASE_URL.rstrip('/')}/api/operation", json=payload_kude, headers=headers_mifactu, timeout=15)
+            if res.status_code == 200:
+                pdf_base64 = res.json().get("kude")
+        except Exception as e:
+            print("Error descargando PDF de MiFactu:", str(e))
+            
+    if pdf_base64:
+        pdf_bytes = base64.b64decode(pdf_base64)
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"Factura_Sifen_{pago.numero_documento}.pdf"
+        )
+    else:
+        return f"""
+        <!DOCTYPE html>
+        <html lang="es">
+        <head><meta charset="UTF-8"><title>Factura Registrada</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #f4f6f9;">
+            <div style="background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 8px; border-top: 5px solid #059669;">
+                <h2 style="color: #059669;">¡Factura Registrada con Éxito!</h2>
+                <p><b>Estado Sifen:</b> {pago.sifen_status}</p>
+                <p><b>CDC:</b> {pago.cdc}</p>
+                <p style="font-size: 12px; color: #666;">(El PDF oficial en Base64 se generará en breve desde los servidores de SIFEN)</p>
+                <a href="/?token={token}&rol=secretaria&seccion=caja" style="display: inline-block; background: #800020; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; font-weight: bold;">← Volver al Panel de Caja</a>
             </div>
-
-            <div class="info-grid">
-                <div>
-                    <b>Fecha:</b> {datetime.date.today().strftime('%d/%m/%Y')}<br>
-                    <b>Paciente:</b> {paciente_nombre}<br>
-                    <b>RUC / Cédula:</b> {ruc_cliente if ruc_cliente else 'Innominado'}<br>
-                    <b>Método:</b> {metodo}
-                </div>
-                <div style="text-align: right;">
-                    <img src="data:image/png;base64,{qr_base64}" alt="QR Sifen" style="width: 90px; height: 90px; border: 1px solid #ddd; padding: 2px; background: white;">
-                </div>
-            </div>
-
-            <table>
-                <tr><th>Descripción</th><th>Cant.</th><th>Precio Unitario</th><th>Total</th></tr>
-                <tr><td>{concepto_servicio}</td><td>1</td><td>₲ {monto:,.0f}</td><td>₲ {monto:,.0f}</td></tr>
-            </table>
-
-            <div style="text-align: right; margin-bottom: 25px;">
-                <span class="total-row">TOTAL: ₲ {monto:,.0f}</span>
-            </div>
-
-            <div class="cdc-section">
-                <span style="font-size: 10.5px; text-transform: uppercase; color: #555; display: block; margin-bottom: 4px;">Código de Control (CDC):</span>
-                <span class="cdc-code">{cdc_generado}</span>
-            </div>
-
-            <a href="/?token={token}&rol=secretaria&seccion=caja" class="btn-back">← Volver al Panel de Caja</a>
-        </div>
-    </body>
-    </html>
-    """
+        </body>
+        </html>
+        """
 
 if __name__ == '__main__':
     valido, mensaje = validar_certificado_pfx()
