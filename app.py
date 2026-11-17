@@ -5,30 +5,34 @@ import requests
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv() # Esto carga las variables del archivo .env al sistema
 import json
 import datetime
 import time
 import anthropic
-import re
+import re # Agregado para extraccion segura de JSON
 import html
 import secrets
 
+# Librerías para la Receta Electrónica (QR y UUID)
 import qrcode
 import io
 import base64
 import uuid
 
+# Librerías para Facturación Electrónica Sifen (.pfx)
 from cryptography.hazmat.primitives.serialization import pkcs12
 
 SIFEN_CERT_PASS = os.getenv('SIFEN_CERT_PASS', '')
 
 def cargar_certificado():
+    """Carga de forma segura el certificado .pfx codificado en Base64 desde Render o local"""
     rutas_b64 = [
         '/etc/secrets/certificado.b64',
         'certificado.b64',
         os.path.join(os.path.dirname(__file__), 'certificado.b64')
     ]
+    
     archivo_encontrado = None
     for r in rutas_b64:
         if r and os.path.exists(r):
@@ -36,6 +40,7 @@ def cargar_certificado():
             break
             
     if not archivo_encontrado:
+        # Respaldo si estuviera como .pfx directo binario
         if os.path.exists('/etc/secrets/certificado.pfx'):
             with open('/etc/secrets/certificado.pfx', 'rb') as f:
                 datos_bin = f.read()
@@ -46,26 +51,28 @@ def cargar_certificado():
                 datos_bin = f.read()
             password = SIFEN_CERT_PASS.strip().encode() if SIFEN_CERT_PASS else b''
             return pkcs12.load_key_and_certificates(datos_bin, password)
-        raise FileNotFoundError("No se encontró el archivo de certificado digital.")
+        raise FileNotFoundError("No se encontró el archivo certificado.b64 ni certificado.pfx en el servidor.")
 
     with open(archivo_encontrado, "r") as f:
         contenido = f.read().strip()
+        
     datos = base64.b64decode(contenido)
     password = SIFEN_CERT_PASS.strip().encode() if SIFEN_CERT_PASS else b''
     return pkcs12.load_key_and_certificates(datos, password)
 
 def validar_certificado_pfx():
+    """Valida de forma segura el certificado cargado"""
     try:
         private_key, certificate, additional_certificates = cargar_certificado()
-        return True, "Certificado digital Sifen cargado y verificado correctamente."
+        subject = certificate.subject.rfc4514_string() if certificate else "Certificado Válido"
+        return True, f"Certificado digital Sifen cargado y verificado correctamente."
     except Exception as e:
-        return False, f"Error al abrir el certificado: {str(e)}"
+        return False, f"Error al abrir el certificado (contraseña incorrecta o archivo corrupto): {str(e)}"
 
+# 1. CONEXIÓN DEFINITIVA A ANTHROPIC
 client = anthropic.Anthropic()
 
 app = Flask(__name__)
-# La clave de sesión debe venir de una variable de entorno (SECRET_KEY).
-# Si no existe, se genera una aleatoria (las sesiones se pierden al reiniciar).
 app.secret_key = os.getenv('SECRET_KEY') or secrets.token_hex(32)
 
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///aeterna.db')
@@ -77,7 +84,12 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# MODELOS DE BASE DE DATOS
+FINANZAS_API_URL = "https://finanzas1.onrender.com/api/v1/registrar-transaccion"
+
+# ==========================================
+# MODELOS DE BASE DE DATOS (PERSISTENCIA TOTAL)
+# ==========================================
+
 class PacienteModel(db.Model):
     __tablename__ = 'pacientes'
     id = db.Column(db.String(50), primary_key=True)
@@ -107,7 +119,7 @@ class FotoClinicaModel(db.Model):
     __tablename__ = 'fotos_clinicas'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     id_paciente = db.Column(db.String(50), nullable=False)
-    tipo = db.Column(db.String(20), nullable=False)
+    tipo = db.Column(db.String(20), nullable=False) # 'antes' o 'despues'
     filename = db.Column(db.String(255), nullable=False)
     fecha = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
 
@@ -120,12 +132,17 @@ class PagoModel(db.Model):
     referencia = db.Column(db.String(100), default="N/A")
     estado = db.Column(db.String(50), default="Completado")
     fecha = db.Column(db.String(50), default="2026-10-20")
-    # Ampliado a 255: los mensajes de SIFEN superan los 50 caracteres.
     sifen_status = db.Column(db.String(255), default="Aprobado Sifen")
     cdc = db.Column(db.String(100), nullable=False)
     establecimiento = db.Column(db.String(3), default="001")
     punto_expedicion = db.Column(db.String(3), default="001")
     numero_documento = db.Column(db.String(7), default="0000001")
+
+class PlantillaRecetaModel(db.Model):
+    __tablename__ = 'plantillas_recetas'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    nombre_plantilla = db.Column(db.String(150), nullable=False, unique=True)
+    contenido = db.Column(db.Text, nullable=False)
 
 class EstudioNoLabModel(db.Model):
     __tablename__ = 'estudios_no_lab'
@@ -256,16 +273,49 @@ LABORATORIOS_AETERNA = {
 }
 
 USUARIOS_DB = {
-    "pedro.calabrese": {"pass": "aeterna2026", "pass_admin": "caja2026", "nombre": "Dr. Pedro Calabrese", "rol_base": "medico", "es_socio": True},
-    "fatima.lopez": {"pass": "aeterna2026", "pass_admin": "caja2026", "nombre": "Dra. Fátima López", "rol_base": "medico", "es_socio": True},
-    "romina.espinola": {"pass": "aeterna2026", "pass_admin": "caja2026", "nombre": "Dra. Romina Espinola", "rol_base": "medico", "es_socio": True},
-    "ximena.ruiz": {"pass": "aeterna2026", "nombre": "Lic. Ximena Ruiz", "rol_base": "medico", "es_socio": False},
-    "alfredo.estigarribia": {"pass": "aeterna2026", "nombre": "Dr. Alfredo Estigarribia", "rol_base": "medico", "es_socio": False},
-    "manuel.duarte": {"pass": "aeterna2026", "nombre": "Manuel Duarte", "rol_base": "entrenador", "es_socio": False},
-    "nadia.bortolace": {"pass": "caja2026", "nombre": "Nadia Bortolace", "rol_base": "secretaria", "es_socio": False},
-    "daiana.gomez": {"pass": "caja2026", "nombre": "Daiana Gomez", "rol_base": "secretaria", "es_socio": False},
-    "buro": {"pass": "admin2026", "nombre": "Buró (Administración / Contabilidad)", "rol_base": "secretaria", "es_socio": False},
-    "recepcion": {"pass": "recepcion2026", "nombre": "Admisión / Recepción", "rol_base": "recepcion", "es_socio": False}
+    "pedro.calabrese": {
+        "pass": "aeterna2026", "pass_admin": "caja2026",
+        "nombre": "Dr. Pedro Calabrese", "rol_base": "medico", "es_socio": True,
+        "especialidad": "Traumatología y Ortopedia (Socio)"
+    },
+    "fatima.lopez": {
+        "pass": "aeterna2026", "pass_admin": "caja2026",
+        "nombre": "Dra. Fátima López", "rol_base": "medico", "es_socio": True,
+        "especialidad": "Traumatología y Ortopedia (Socio)"
+    },
+    "romina.espinola": {
+        "pass": "aeterna2026", "pass_admin": "caja2026",
+        "nombre": "Dra. Romina Espinola", "rol_base": "medico", "es_socio": True,
+        "especialidad": "Medicina Familiar - Pos Endocrinología (Socio)"
+    },
+    "ximena.ruiz": {
+        "pass": "aeterna2026", "nombre": "Lic. Ximena Ruiz", "rol_base": "medico", "es_socio": False,
+        "especialidad": "Nutricionista Clínica & Longevidad"
+    },
+    "alfredo.estigarribia": {
+        "pass": "aeterna2026", "nombre": "Dr. Alfredo Estigarribia", "rol_base": "medico", "es_socio": False,
+        "especialidad": "Odontología del Sueño"
+    },
+    "manuel.duarte": {
+        "pass": "aeterna2026", "nombre": "Manuel Duarte", "rol_base": "entrenador", "es_socio": False,
+        "especialidad": "Preparador Físico / Performance Coach"
+    },
+    "nadia.bortolace": {
+        "pass": "caja2026", "nombre": "Nadia Bortolace", "rol_base": "secretaria", "es_socio": False,
+        "especialidad": "Gestión Financiera & Facturación Sifen"
+    },
+    "daiana.gomez": {
+        "pass": "caja2026", "nombre": "Daiana Gomez", "rol_base": "secretaria", "es_socio": False,
+        "especialidad": "Gestión Financiera & Facturación Sifen"
+    },
+    "buro": {
+        "pass": "admin2026", "nombre": "Buró (Administración / Contabilidad)", "rol_base": "secretaria", "es_socio": False,
+        "especialidad": "Administración General & Facturación Sifen"
+    },
+    "recepcion": {
+        "pass": "recepcion2026", "nombre": "Admisión / Recepción", "rol_base": "recepcion", "es_socio": False,
+        "especialidad": "Gestión de Caja y Ventas"
+    }
 }
 
 LOGIN_TEMPLATE = """<!DOCTYPE html>
@@ -567,6 +617,7 @@ PORTAL_PRECONSULTA_TEMPLATE = """<!DOCTYPE html>
                 </select>
             </div>
 
+            <!-- Sincronización Automática Integral de Dispositivo -->
             <div style="background: rgba(5, 150, 105, 0.04); border: 1px solid #059669; padding: 16px; border-radius: 6px; margin-top: 20px; margin-bottom: 20px;">
                 <h4 style="color: #059669; margin-top: 0; font-size: 13px; text-transform: uppercase;">⌚ Sincronización Completa de Salud y Wearables</h4>
                 <p style="font-size: 11.5px; color: #555; margin-bottom: 12px;">Permita la lectura masiva de sus métricas (pasos, sueño profundo, HRV, frecuencia cardíaca y entrenamientos) para integrarlas automáticamente a su expediente en Aeterna.</p>
@@ -1311,6 +1362,9 @@ def ver_archivo_subido(filename):
         return redirect(url_for('login'))
     return send_from_directory('uploads', filename)
 
+# ==========================================
+# RUTAS DE RECETA ELECTRÓNICA Y QR
+# ==========================================
 @app.route('/medico/imprimir-receta/<id_paciente>')
 def imprimir_receta(id_paciente):
     token = request.args.get('token')
@@ -1565,124 +1619,15 @@ def generar_orden_lab():
                            qr_base64=qr_base64,
                            texto_imprimir=texto_orden)
 
-@app.route('/medico/reporte-paciente/<string:id_paciente>')
-def reporte_paciente(id_paciente):
-    token = request.args.get('token')
-    if not token or f'user_{token}' not in session:
-        return redirect(url_for('login'))
-        
-    p = PacienteModel.query.filter_by(id=id_paciente).first()
-    if not p:
-        return "Paciente no encontrado", 404
-        
-    nombre_medico = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
-    biomarcadores = BiomarcadorModel.query.filter_by(id_paciente=p.id).all()
-    evoluciones = ConsultaModel.query.filter_by(id_paciente=p.id).all()
-
-    return render_template_string(REPORTE_IMPRIMIBLE_TEMPLATE, p=p, biomarcadores=biomarcadores, evoluciones=evoluciones, token=token, nombre_medico=nombre_medico)
-
-REPORTE_IMPRIMIBLE_TEMPLATE = """<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Reporte Clínico — Instituto Aeterna</title>
-    <style>
-        body { font-family: 'Inter', Arial, sans-serif; color: #121110; background: #fff; margin: 0; padding: 40px; }
-        .header-membrete { border-bottom: 2px solid #800020; padding-bottom: 15px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-        .header-membrete h1 { font-size: 18px; color: #800020; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
-        .header-membrete p { font-size: 11px; color: #555; margin: 4px 0 0 0; }
-        .info-paciente { background: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12.5px; }
-        .seccion-titulo { font-size: 13px; font-weight: bold; color: #800020; text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 5px; margin: 20px 0 10px 0; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-        th { background: #f4f6f9; color: #333; font-size: 11px; text-transform: uppercase; }
-        .no-print { margin-bottom: 30px; display: flex; gap: 10px; }
-        .btn { background: #800020; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; text-decoration: none; display: inline-block; }
-        .btn-wa { background: #25d366; }
-        @media print { .no-print { display: none; } body { padding: 0; } }
-    </style>
-</head>
-<body>
-    <div class="no-print">
-        <button onclick="window.print()" class="btn">🖨️ Imprimir / Guardar PDF</button>
-        <button onclick="enviarResumenWhatsApp()" class="btn btn-wa">💬 Enviar Resumen por WhatsApp</button>
-        <a href="javascript:history.back()" class="btn" style="background: #555;">← Volver al Sistema</a>
-    </div>
-
-    <div class="header-membrete">
-        <div>
-            <h1>Instituto Aeterna — Sanatorio Le Blanc</h1>
-            <p>Medicina de Precisión, Longevidad y Optimización Metabólica | CDE, Paraguay</p>
-        </div>
-        <div style="text-align: right;">
-            <p><b>Fecha de Emisión:</b> <span id="fecha-actual"></span></p>
-        </div>
-    </div>
-
-    <div class="info-paciente">
-        <div>
-            <p><b>Paciente:</b> {{ p.nombre }}</p>
-            <p><b>Edad:</b> {{ p.edad }} años</p>
-            <p><b>Programa:</b> {{ p.programa }}</p>
-        </div>
-        <div>
-            <p><b>Médico Tratante:</b> {{ p.medico }}</p>
-            <p><b>Compromiso:</b> {{ p.compromiso }}</p>
-        </div>
-    </div>
-
-    <div class="seccion-titulo">Historial y Evolución Reciente</div>
-    {% if evoluciones %}
-        {% for ev in evoluciones %}
-        <div style="margin-bottom: 12px; font-size: 12.5px; line-height: 1.5; border-left: 3px solid #800020; padding-left: 10px;">
-            <b>📅 {{ ev.fecha }} (Dr/Dra. {{ ev.medico }})</b><br>
-            <span>{{ ev.detalle }}</span>
-        </div>
-        {% endfor %}
-    {% else %}
-        <p style="font-size: 12px; color: #666;">No hay notas de evolución registradas aún.</p>
-    {% endif %}
-
-    <div class="seccion-titulo">Analítica Longitudinal de Biomarcadores</div>
-    {% if biomarcadores %}
-    <table>
-        <tr><th>Parámetro</th><th>Fecha</th><th>Valor Registrado</th><th>Unidad</th></tr>
-        {% for b in biomarcadores %}
-        <tr>
-            <td><b>{{ b.parametro }}</b></td>
-            <td>{{ b.fecha }}</td>
-            <td>{{ b.valor }}</td>
-            <td>{{ b.unidad }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    {% else %}
-        <p style="font-size: 12px; color: #666;">No hay biomarcadores tabulados actualmente.</p>
-    {% endif %}
-
-    <script>
-        document.getElementById('fecha-actual').innerText = new Date().toLocaleDateString();
-        function enviarResumenWhatsApp() {
-            const nombrePaciente = "{{ p.nombre }}";
-            const texto = `¡Hola ${nombrePaciente}! Le escribimos desde el Sanatorio Le Blanc (Instituto Aeterna). Aquí le compartimos el resumen de su evolución clínica y analíticas recientes. Quedamos a disposición.`;
-            window.open(`https://wa.me/?text=` + encodeURIComponent(texto), '_blank');
-        }
-    </script>
-</body>
-</html>
-"""
-
 # ==========================================
 # INTEGRACIÓN REAL CON API MIFACTU (SIFEN)
 # ==========================================
 
 MIFACTU_BASE_URL = os.getenv('MIFACTU_BASE_URL', 'https://mifactu.com.py')
 MIFACTU_RUC = os.getenv('MIFACTU_RUC', '80172292')
-# La contraseña NUNCA va en el código: definila como variable de entorno MIFACTU_PASSWORD.
 MIFACTU_PASSWORD = os.getenv('MIFACTU_PASSWORD', '')
 
 MIFACTU_OPERATION_URL = f"{MIFACTU_BASE_URL.rstrip('/')}/api/operation"
-
 
 def obtener_token_mifactu():
     if not MIFACTU_PASSWORD:
@@ -1700,7 +1645,6 @@ def obtener_token_mifactu():
         print("Excepción al conectar con MiFactu:", str(e))
     return None
 
-
 def headers_mifactu(token_m):
     return {
         "Authorization": f"Bearer {token_m}",
@@ -1708,9 +1652,7 @@ def headers_mifactu(token_m):
         "Accept": "application/json"
     }
 
-
 def siguiente_numero_documento(establecimiento, punto_expedicion):
-    """Correlativo propio: último número usado + 1 (7 dígitos)."""
     ultimo = 0
     pagos = PagoModel.query.filter_by(establecimiento=establecimiento, punto_expedicion=punto_expedicion).all()
     for p in pagos:
@@ -1720,12 +1662,8 @@ def siguiente_numero_documento(establecimiento, punto_expedicion):
             pass
     return f"{ultimo + 1:07d}"
 
-
 def consultar_estado_mifactu(token_m, est, pun, num, esperas=(0,)):
-    """
-    Consulta el estado (tipOpe=2). 'esperas' = segundos a esperar antes de cada intento.
-    Devuelve un texto de estado, o None si no se pudo consultar.
-    """
+    # CORREGIDO: tipOpe con "O" mayúscula según la Guía de Integración (Capítulo 8)
     payload = {"tipOpe": "2", "dEst": est, "dPunExp": pun, "dNumDoc": num, "tipoDoc": "FE"}
     estado = None
     for espera in esperas:
@@ -1753,7 +1691,6 @@ def consultar_estado_mifactu(token_m, est, pun, num, esperas=(0,)):
             estado = f"Error de red API: {str(e)}"
     return estado
 
-
 @app.route('/api/caja/registrar-pago', methods=['POST'])
 def registrar_pago_sifen():
     token = request.args.get('token')
@@ -1766,7 +1703,6 @@ def registrar_pago_sifen():
     monto = float(request.form.get('monto', 0))
     metodo = request.form.get('metodo', 'Efectivo')
     
-    # Receptor: contribuyente (RUC con DV) o no contribuyente (cédula / innominado)
     ruc_limpio = ""
     dv_limpio = ""
     num_id_limpio = "0"
@@ -1780,7 +1716,7 @@ def registrar_pago_sifen():
         num_id_limpio = re.sub(r'\W', '', ruc_cliente) or "0"
 
     cdc_generado = None
-    estado_sifen = "Error: no se pudo autenticar con MiFactu (revisá MIFACTU_PASSWORD)"
+    estado_sifen = "Error: no se pudo autenticar con MiFactu"
     
     establecimiento = "001"
     punto_expedicion = "001"
@@ -1790,17 +1726,20 @@ def registrar_pago_sifen():
     token_mifactu = obtener_token_mifactu()
 
     if token_mifactu:
+        # CORREGIDO: tipOpe con "O" mayúscula según la Guía de Integración (Capítulo 4.1)
         payload_factura = {
             "tipOpe": "1",
-            "iTiDE": "1",
+            "iTiDE": 1,
             "dEst": establecimiento,
             "dPunExp": punto_expedicion,
             "dNumDoc": num_doc,
             "dFeEmiDE": datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-            "iTipTra": "2",  # 2 = Prestación de servicios
+            "iTipTra": 2, 
             "cMoneOpe": "PYG",
-            "iCondOpe": "1",
-            "iNatRec": str(i_nat_rec),
+            "iCondOpe": 1,
+            "iNatRec": i_nat_rec,
+            "dNomRec": paciente_nombre,
+            "dEmailRec": "facturas@example.invalid",
             "enviar_sifen": True,
             "Detalles": [
                 {
@@ -1808,58 +1747,49 @@ def registrar_pago_sifen():
                     "dDesProSer": concepto_servicio,
                     "cUniMed": "77",
                     "dDesUniMed": "UNI",
-                    "dCantProSer": "1",
-                    "dPUniProSer": monto_str,
-                    "dTotBruOpeItem": monto_str,
-                    "dDescItem": "0",
-                    "dTotOpeItem": monto_str,
-                    "iAfecIVA": "3",
-                    "dTasaIVA": "0",
-                    "dBasGravIVA": "0",
-                    "dLiqIVAItem": "0"
+                    "dCantProSer": 1,
+                    "dPUniProSer": monto,
+                    "dTotopeItem": monto,
+                    "iAfecIVA": 3,
+                    "dTasaIVA": 0
                 }
             ],
             "Subtotales": [
                 {
-                    "dSub10": "0", "dSub5": "0", "dSubExe": monto_str,
-                    "dTotOpe": monto_str, "dTotGralOpe": monto_str,
-                    "dTotIVA": "0", "dIVA10": "0", "dIVA5": "0"
+                    "dSub10": 0, "dSub5": 0, "dSubExe": monto,
+                    "dTotOpe": monto, "dTotGralOpe": monto,
+                    "dTotIVA": 0, "dIVA10": 0, "dIVA5": 0
                 }
             ],
             "FormaPago": [
                 {
-                    "iTiPago": "1" if metodo == "Efectivo" else "5",
+                    "iTiPago": 1 if metodo == "Efectivo" else 5,
                     "dDesTiPag": metodo,
-                    "dMonTiPag": monto_str,
+                    "dMonTiPag": monto,
                     "cMoneTiPag": "PYG"
                 }
             ]
         }
 
         if i_nat_rec == 1:
-            # RUC >= 80000000 corresponde normalmente a personas jurídicas
             try:
                 es_juridica = int(ruc_limpio) >= 80000000
             except ValueError:
                 es_juridica = False
-            payload_factura["iTiContRec"] = "2" if es_juridica else "1"
-            payload_factura["iTipIDRec"] = "1"
+            payload_factura["iTiContRec"] = 2 if es_juridica else 1
+            payload_factura["iTipIDRec"] = 1
             payload_factura["dRucRec"] = ruc_limpio
             payload_factura["dDVRec"] = dv_limpio
-            payload_factura["dNomRec"] = paciente_nombre
         elif num_id_limpio == "0":
-            # Innominado
-            payload_factura["iTipIDRec"] = "5"
+            payload_factura["iTipIDRec"] = 5
             payload_factura["dNumIDRec"] = "0"
             payload_factura["dNomRec"] = "Sin Nombre"
         else:
-            payload_factura["iTipIDRec"] = "1"  # cédula paraguaya
+            payload_factura["iTipIDRec"] = 1
             payload_factura["dNumIDRec"] = num_id_limpio
-            payload_factura["dNomRec"] = paciente_nombre
 
         try:
-            res_mifactu = requests.post(MIFACTU_OPERATION_URL, json=payload_factura,
-                                        headers=headers_mifactu(token_mifactu), timeout=20)
+            res_mifactu = requests.post(MIFACTU_OPERATION_URL, json=payload_factura, headers=headers_mifactu(token_mifactu), timeout=20)
             try:
                 resultado_json = res_mifactu.json()
             except Exception:
@@ -1868,14 +1798,11 @@ def registrar_pago_sifen():
             if res_mifactu.status_code == 200 and resultado_json.get("status") == "success":
                 cdc_generado = resultado_json.get("CDC")
                 estado_sifen = "Procesando"
-                # Espera creciente (~15 s máx.) para no superar el timeout del servidor web.
-                # Si sigue en proceso, se reconsulta al abrir el KUDE.
-                nuevo = consultar_estado_mifactu(token_mifactu, establecimiento, punto_expedicion,
-                                                 num_doc, esperas=(2, 3, 5, 5))
+                nuevo = consultar_estado_mifactu(token_mifactu, establecimiento, punto_expedicion, num_doc, esperas=(2, 3, 5, 5))
                 if nuevo:
                     estado_sifen = nuevo
             else:
-                estado_sifen = f"Error API ({res_mifactu.status_code}): {resultado_json.get('message', 'Error de validación')}"
+                estado_sifen = f"Rechazado: {resultado_json.get('message', 'Error de validación')}"
         except Exception as api_err:
             estado_sifen = f"Error de red API: {str(api_err)}"
 
@@ -1912,18 +1839,14 @@ def descargar_kude_oficial(pago_id):
     pdf_base64 = None
     if token_mifactu:
         estado_actual = pago.sifen_status or ""
-        # Si todavía no está aprobado ni falló, reconsultar el estado ahora
-        if (not estado_actual.startswith("Aprobado")
-                and not estado_actual.startswith(("Rechazado", "Error"))
-                and pago.cdc != "SIN-CDC"):
-            nuevo = consultar_estado_mifactu(token_mifactu, pago.establecimiento,
-                                             pago.punto_expedicion, pago.numero_documento)
+        if (not estado_actual.startswith("Aprobado") and not estado_actual.startswith(("Rechazado", "Error")) and pago.cdc != "SIN-CDC"):
+            nuevo = consultar_estado_mifactu(token_mifactu, pago.establecimiento, pago.punto_expedicion, pago.numero_documento)
             if nuevo:
                 pago.sifen_status = nuevo[:250]
                 db.session.commit()
 
-        # El KUDE se pide solo con el documento aprobado
         if (pago.sifen_status or "").startswith("Aprobado"):
+            # CORREGIDO: tipOpe con "O" mayúscula (4) para descarga de KUDE según Guía Capítulo 9
             payload_kude = {
                 "tipOpe": "4",
                 "dEst": pago.establecimiento,
@@ -1932,8 +1855,7 @@ def descargar_kude_oficial(pago_id):
                 "tipoDoc": "FE"
             }
             try:
-                res = requests.post(MIFACTU_OPERATION_URL, json=payload_kude,
-                                    headers=headers_mifactu(token_mifactu), timeout=20)
+                res = requests.post(MIFACTU_OPERATION_URL, json=payload_kude, headers=headers_mifactu(token_mifactu), timeout=20)
                 if res.status_code == 200:
                     pdf_base64 = res.json().get("kude")
             except Exception as e:
@@ -1948,7 +1870,6 @@ def descargar_kude_oficial(pago_id):
             download_name=f"Factura_Sifen_{pago.numero_documento}.pdf"
         )
 
-    # Pantalla de estado (ya no dice "con éxito" si falló)
     estado = pago.sifen_status or ""
     if estado.startswith(("Rechazado", "Error")):
         titulo, color = "No se pudo emitir la factura", "#dc2626"
@@ -1958,17 +1879,10 @@ def descargar_kude_oficial(pago_id):
         titulo, color = "Factura registrada: en proceso en SIFEN", "#d97706"
 
     estado_html = html.escape(estado)
-    cdc_html = ""
-    if pago.cdc and pago.cdc != "SIN-CDC":
-        cdc_html = f"<p><b>CDC:</b> {html.escape(pago.cdc)}</p>"
+    cdc_html = f"<p><b>CDC:</b> {html.escape(pago.cdc)}</p>" if pago.cdc and pago.cdc != "SIN-CDC" else ""
     num_html = html.escape(f"{pago.establecimiento}-{pago.punto_expedicion}-{pago.numero_documento}")
     token_html = html.escape(token)
-    reintentar = ""
-    if not estado.startswith(("Rechazado", "Error")):
-        reintentar = (f'<a href="/api/caja/descargar-kude/{pago.id}?token={token_html}" '
-                      f'style="display: inline-block; background: #555; color: white; padding: 10px 20px; '
-                      f'text-decoration: none; border-radius: 5px; margin-top: 15px; margin-right: 8px; font-weight: bold;">'
-                      f'↻ Actualizar estado</a>')
+    reintentar = f'<a href="/api/caja/descargar-kude/{pago.id}?token={token_html}" style="display: inline-block; background: #555; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; margin-right: 8px; font-weight: bold;">↻ Actualizar estado</a>' if not estado.startswith(("Rechazado", "Error")) else ""
 
     return f"""
     <!DOCTYPE html>
