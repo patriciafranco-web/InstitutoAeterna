@@ -943,7 +943,71 @@ def portal_preconsulta_guardar_por_token(token_portal):
             proto.estado_sync = "Sincronizado Completo (Automático)"
         db.session.commit()
     return render_template_string(PORTAL_GRACIAS_TEMPLATE)
-    @app.route('/api/admision/agendar-paciente', methods=['POST'])
+    @app.route('/portal/pre-consulta/<token_portal>', methods=['POST'])
+def portal_preconsulta_guardar_por_token(token_portal):
+    paciente = PacienteModel.query.filter_by(token_portal=token_portal).first()
+    if paciente:
+        data_completa = {
+            "fecha_nacimiento": request.form.get('fecha_nacimiento', ''),
+            "genero": request.form.get('genero', ''),
+            "residencia": request.form.get('residencia', ''),
+            "profesion": request.form.get('profesion', ''),
+            "telefono": request.form.get('telefono', ''),
+            "correo": request.form.get('correo', ''),
+            "contacto_emergencia": request.form.get('contacto_emergencia', ''),
+            "objetivos": request.form.get('objetivos', ''),
+            "queja_principal": request.form.get('queja_principal', ''),
+            "autoevaluacion": request.form.get('autoevaluacion', ''),
+            "impacto_vida": request.form.get('impacto_vida', ''),
+            "antecedentes_medicos": request.form.get('antecedentes_medicos', ''),
+            "cirugias": request.form.get('cirugias', ''),
+            "antecedentes_familiares": request.form.get('antecedentes_familiares', ''),
+            "alergias": request.form.get('alergias', ''),
+            "medicamentos": request.form.get('medicamentos', ''),
+            "suplementos": request.form.get('suplementos', ''),
+            "trh": request.form.get('trh', ''),
+            "estudios_geneticos": request.form.get('estudios_geneticos', ''),
+            "frecuencia_evacuacion": request.form.get('frecuencia_evacuacion', ''),
+            "escala_bristol": request.form.get('escala_bristol', ''),
+            "evacuacion_completa": request.form.get('evacuacion_completa', ''),
+            "hinchazon": request.form.get('hinchazon', ''),
+            "sintomas_digestivos": request.form.get('sintomas_digestivos', ''),
+            "diag_digestivo": request.form.get('diag_digestivo', ''),
+            "nutricion": request.form.get('nutricion', ''),
+            "procesados": request.form.get('procesados', ''),
+            "agua": request.form.get('agua', ''),
+            "alcohol": request.form.get('alcohol', ''),
+            "registro_comidas": request.form.get('registro_comidas', ''),
+            "sueno_horas": request.form.get('sueno_horas', ''),
+            "sueno_calidad": request.form.get('sueno_calidad', ''),
+            "wearable": request.form.get('wearable', 'Ninguno'),
+            "dias_ejercicio": request.form.get('dias_ejercicio', ''),
+            "tipo_entrenamiento": request.form.get('tipo_entrenamiento', ''),
+            "dolor_articular": request.form.get('dolor_articular', ''),
+            "estres": request.form.get('estres', ''),
+            "manejo_estres": request.form.get('manejo_estres', ''),
+            "toxinas": request.form.get('toxinas', ''),
+            "jornada": request.form.get('jornada', ''),
+            "dificultad_comidas": request.form.get('dificultad_comidas', ''),
+            "energia_dia": request.form.get('energia_dia', ''),
+            "bajones_energia": request.form.get('bajones_energia', ''),
+            "salud_hormonal": request.form.get('salud_hormonal', ''),
+            "lab_recientes": request.form.get('lab_recientes', '')
+        }
+        paciente.pre_consulta_json = json.dumps(data_completa)
+        paciente.compromiso = request.form.get('compromiso', 'Pendiente')
+        datos_wearable_str = request.form.get('datos_wearable_json', '')
+        if datos_wearable_str:
+            proto = ProtocoloWearablesModel.query.filter_by(id_paciente=paciente.id).first()
+            if not proto:
+                proto = ProtocoloWearablesModel(id_paciente=paciente.id)
+                db.session.add(proto)
+            proto.observaciones = f"Sincronización masiva completa desde Portal 360°:\n{datos_wearable_str}"
+            proto.estado_sync = "Sincronizado Completo (Automático)"
+        db.session.commit()
+    return render_template_string(PORTAL_GRACIAS_TEMPLATE)
+
+@app.route('/api/admision/agendar-paciente', methods=['POST'])
 def agendar_paciente():
     token = request.args.get('token')
     nombre = request.form.get('nombre', '').strip()
