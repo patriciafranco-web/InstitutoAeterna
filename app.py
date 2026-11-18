@@ -872,9 +872,9 @@ def index():
     )
 
 # ==========================================
-# REQUERIMIENTO 01: VISTA PRECONSULTA PARA SECRETARÍA (CON OPCIÓN DE IMPRESIÓN)
+# REQUERIMIENTO 01: VISTA PRECONSULTA PARA SECRETARÍA (CON OPCIÓN DE IMPRESIÓN Y EDICIÓN)
 # ==========================================
-@app.route('/recepcion/imprimir-preconsulta/<string:id_paciente>')
+@app.route('/recepcion/imprimir-preconsulta/<string:id_paciente>', methods=['GET', 'POST'])
 def imprimir_preconsulta(id_paciente):
     token = request.args.get('token')
     if not token or f'user_{token}' not in session:
@@ -884,6 +884,58 @@ def imprimir_preconsulta(id_paciente):
     if not p:
         return "Paciente no encontrado", 404
         
+    if request.method == 'POST':
+        data_completa = {
+            "fecha_nacimiento": request.form.get('fecha_nacimiento', ''),
+            "genero": request.form.get('genero', ''),
+            "residencia": request.form.get('residencia', ''),
+            "profesion": request.form.get('profesion', ''),
+            "telefono": request.form.get('telefono', ''),
+            "correo": request.form.get('correo', ''),
+            "contacto_emergencia": request.form.get('contacto_emergencia', ''),
+            "objetivos": request.form.get('objetivos', ''),
+            "queja_principal": request.form.get('queja_principal', ''),
+            "autoevaluacion": request.form.get('autoevaluacion', ''),
+            "impacto_vida": request.form.get('impacto_vida', ''),
+            "antecedentes_medicos": request.form.get('antecedentes_medicos', ''),
+            "cirugias": request.form.get('cirugias', ''),
+            "antecedentes_familiares": request.form.get('antecedentes_familiares', ''),
+            "alergias": request.form.get('alergias', ''),
+            "medicamentos": request.form.get('medicamentos', ''),
+            "suplementos": request.form.get('suplementos', ''),
+            "trh": request.form.get('trh', ''),
+            "estudios_geneticos": request.form.get('estudios_geneticos', ''),
+            "frecuencia_evacuacion": request.form.get('frecuencia_evacuacion', ''),
+            "escala_bristol": request.form.get('escala_bristol', ''),
+            "evacuacion_completa": request.form.get('evacuacion_completa', ''),
+            "hinchazon": request.form.get('hinchazon', ''),
+            "sintomas_digestivos": request.form.get('sintomas_digestivos', ''),
+            "diag_digestivo": request.form.get('diag_digestivo', ''),
+            "nutricion": request.form.get('nutricion', ''),
+            "procesados": request.form.get('procesados', ''),
+            "agua": request.form.get('agua', ''),
+            "alcohol": request.form.get('alcohol', ''),
+            "registro_comidas": request.form.get('registro_comidas', ''),
+            "sueno_horas": request.form.get('sueno_horas', ''),
+            "sueno_calidad": request.form.get('sueno_calidad', ''),
+            "wearable": request.form.get('wearable', ''),
+            "dias_ejercicio": request.form.get('dias_ejercicio', ''),
+            "tipo_entrenamiento": request.form.get('tipo_entrenamiento', ''),
+            "dolor_articular": request.form.get('dolor_articular', ''),
+            "estres": request.form.get('estres', ''),
+            "manejo_estres": request.form.get('manejo_estres', ''),
+            "toxinas": request.form.get('toxinas', ''),
+            "jornada": request.form.get('jornada', ''),
+            "dificultad_comidas": request.form.get('dificultad_comidas', ''),
+            "energia_dia": request.form.get('energia_dia', ''),
+            "bajones_energia": request.form.get('bajones_energia', ''),
+            "salud_hormonal": request.form.get('salud_hormonal', ''),
+            "lab_recientes": request.form.get('lab_recientes', '')
+        }
+        p.pre_consulta_json = json.dumps(data_completa)
+        db.session.commit()
+        return redirect(url_for('imprimir_preconsulta', id_paciente=id_paciente, token=token))
+
     datos_pre = {}
     if p.pre_consulta_json:
         try:
@@ -891,21 +943,119 @@ def imprimir_preconsulta(id_paciente):
         except Exception:
             pass
             
-    html_pre = """
+    html_preform = """
     <!DOCTYPE html>
-    <html lang="es"><head><meta charset="UTF-8"><title>Preconsulta - {{ p.nombre }}</title>
-    <style>body{font-family: Arial; padding:40px; line-height:1.6; color:#121110;} h1{color:#800020;} h3{border-bottom:2px solid #800020; padding-bottom:5px; color:#800020;} .dato{margin-bottom:10px; font-size:14px;}</style></head>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <title>Pre-Consulta 360° — Secretaría & Expediente</title>
+        <style>
+            body { font-family: 'Inter', Arial, sans-serif; padding: 30px; color: #121110; background: #f4f6f9; line-height: 1.5; }
+            .box { max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; border-top: 5px solid #800020; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+            h2 { color: #800020; text-transform: uppercase; font-size: 18px; text-align: center; margin-bottom: 5px; }
+            p.sub { text-align: center; font-size: 12px; color: #555; margin-bottom: 25px; }
+            .section-title { color: #800020; font-size: 13.5px; text-transform: uppercase; border-bottom: 2px solid #800020; padding-bottom: 5px; margin-top: 30px; margin-bottom: 15px; font-weight: bold; }
+            .form-group { margin-bottom: 18px; }
+            label { display: block; font-size: 11.5px; font-weight: bold; color: #444; text-transform: uppercase; margin-bottom: 6px; }
+            input[type="text"], textarea, select { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; font-size: 13px; background: #f9fafb; }
+            input:focus, textarea:focus { border-color: #800020; outline: none; background: #fff; }
+            .acciones { margin-top: 35px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+            .btn { background: #800020; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 12px; text-decoration: none; display: inline-block; text-align: center; }
+            .btn-print { background: #059669; }
+            .btn-blank { background: #25d366; }
+            .btn:hover { opacity: 0.9; }
+            @media print {
+                .no-print { display: none !important; }
+                body { background: white; padding: 0; }
+                .box { border: none; box-shadow: none; padding: 0; }
+                input, textarea, select { border: none; background: none; padding: 2px 0; font-size: 12px; font-family: inherit; }
+            }
+        </style>
+    </head>
     <body>
-        <h1>Cuestionario de Pre-Consulta 360°</h1>
-        <p><b>Paciente:</b> {{ p.nombre }} ({{ p.edad }} años)</p>
-        <h3>Resultados Completados:</h3>
-        {% for clave, valor in datos.items() %}
-        <div class="dato"><b>{{ clave.replace('_', ' ').title() }}:</b> {{ valor }}</div>
-        {% endfor %}
-        <button onclick="window.print()" style="margin-top:30px; padding:10px; background:#800020; color:white; border:none; cursor:pointer;">🖨️ Imprimir Cuestionario para Expediente</button>
-    </body></html>
+        <div class="box">
+            <h2>Instituto Aeterna E.A.S. — Sanatorio Le Blanc</h2>
+            <p class="sub">Formulario de Pre-Consulta 360° | Expediente del Paciente: <b>{{ p.nombre }}</b></p>
+            
+            <form method="POST">
+                <div class="section-title">1. Datos Personales y de Contacto</div>
+                <div class="form-group"><label>Nombre y Apellido:</label><input type="text" name="nombre_completo" value="{{ p.nombre }}"></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Fecha de Nacimiento / Edad:</label><input type="text" name="fecha_nacimiento" value="{{ datos.get('fecha_nacimiento', p.edad|string + ' años') }}"></div>
+                    <div class="form-group"><label>Género:</label><input type="text" name="genero" value="{{ datos.get('genero', '') }}"></div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Nacionalidad y Residencia:</label><input type="text" name="residencia" value="{{ datos.get('residencia', '') }}"></div>
+                    <div class="form-group"><label>Profesión / Ocupación:</label><input type="text" name="profesion" value="{{ datos.get('profesion', '') }}"></div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Teléfono (WhatsApp):</label><input type="text" name="telefono" value="{{ datos.get('telefono', '') }}"></div>
+                    <div class="form-group"><label>Correo Electrónico:</label><input type="text" name="correo" value="{{ datos.get('correo', '') }}"></div>
+                </div>
+                <div class="form-group"><label>Contacto de Emergencia:</label><input type="text" name="contacto_emergencia" value="{{ datos.get('contacto_emergencia', '') }}"></div>
+
+                <div class="section-title">2. Objetivos y Expectativas Clínicas</div>
+                <div class="form-group"><label>Objetivo principal:</label><textarea name="objetivos" rows="2">{{ datos.get('objetivos', '') }}</textarea></div>
+                <div class="form-group"><label>Queja principal de salud:</label><textarea name="queja_principal" rows="2">{{ datos.get('queja_principal', '') }}</textarea></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Autoevaluación de salud:</label><input type="text" name="autoevaluacion" value="{{ datos.get('autoevaluacion', '') }}"></div>
+                    <div class="form-group"><label>Impacto de alcanzar objetivos:</label><input type="text" name="impacto_vida" value="{{ datos.get('impacto_vida', '') }}"></div>
+                </div>
+
+                <div class="section-title">3. Historial Médico y Antecedentes</div>
+                <div class="form-group"><label>Enfermedades crónicas:</label><input type="text" name="antecedentes_medicos" value="{{ datos.get('antecedentes_medicos', '') }}"></div>
+                <div class="form-group"><label>Cirugías u hospitalizaciones:</label><input type="text" name="cirugias" value="{{ datos.get('cirugias', '') }}"></div>
+                <div class="form-group"><label>Antecedentes familiares:</label><input type="text" name="antecedentes_familiares" value="{{ datos.get('antecedentes_familiares', '') }}"></div>
+                <div class="form-group"><label>Alergias o intolerancias:</label><input type="text" name="alergias" value="{{ datos.get('alergias', '') }}"></div>
+
+                <div class="section-title">4. Medicamentos y Suplementos</div>
+                <div class="form-group"><label>Medicamentos actuales:</label><input type="text" name="medicamentos" value="{{ datos.get('medicamentos', '') }}"></div>
+                <div class="form-group"><label>Suplementos, vitaminas o péptidos:</label><input type="text" name="suplementos" value="{{ datos.get('suplementos', '') }}"></div>
+
+                <div class="section-title">5. Salud Digestiva & Funcional</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Frecuencia de evacuación:</label><input type="text" name="frecuencia_evacuacion" value="{{ datos.get('frecuencia_evacuacion', '') }}"></div>
+                    <div class="form-group"><label>Escala de Bristol:</label><input type="text" name="escala_bristol" value="{{ datos.get('escala_bristol', '') }}"></div>
+                </div>
+
+                <div class="section-title">6. Sueño, Nutrición y Hábitos</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Horas de sueño:</label><input type="text" name="sueno_horas" value="{{ datos.get('sueno_horas', '') }}"></div>
+                    <div class="form-group"><label>Wearable:</label><input type="text" name="wearable" value="{{ datos.get('wearable', '') }}"></div>
+                </div>
+                <div class="form-group"><label>Patrón alimentario:</label><input type="text" name="nutricion" value="{{ datos.get('nutricion', '') }}"></div>
+
+                <div class="section-title">7. Estrés, Energía y Compromiso</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Nivel de estrés (1-10):</label><input type="text" name="estres" value="{{ datos.get('estres', '') }}"></div>
+                    <div class="form-group"><label>Nivel de energía (1-10):</label><input type="text" name="energia_dia" value="{{ datos.get('energia_dia', '') }}"></div>
+                </div>
+
+                <div class="acciones no-print">
+                    <button type="submit" class="btn">💾 Guardar / Actualizar Datos</button>
+                    <button type="button" class="btn btn-print" onclick="window.print()">🖨️ Imprimir con Respuestas</button>
+                    <button type="button" class="btn btn-blank" onclick="imprimirEnBlanco()">📄 Imprimir Versión en Blanco</button>
+                </div>
+            </form>
+        </div>
+        
+        <script>
+            function imprimirEnBlanco() {
+                const valoresOriginales = {};
+                document.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach((el, idx) => {
+                    valoresOriginales[idx] = el.value;
+                    el.value = '';
+                });
+                window.print();
+                document.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach((el, idx) => {
+                    el.value = valoresOriginales[idx];
+                });
+            }
+        </script>
+    </body>
+    </html>
     """
-    return render_template_string(html_pre, p=p, datos=datos_pre)
+    return render_template_string(html_preform, p=p, datos=datos_pre)
 
 @app.route('/portal/pre-consulta/<token_portal>', methods=['GET'])
 def portal_preconsulta_por_token(token_portal):
@@ -1202,28 +1352,6 @@ def guardar_protocolo_regenerativo():
     
     return redirect(url_for('index', token=token, rol='medico', seccion='regenerativa', id=id_paciente))
 
-# ==========================================
-# REQUERIMIENTO: IA EN MÓDULO BIOLOGICS
-# ==========================================
-@app.route('/api/medico/ia-analizar-biologics', methods=['POST'])
-def ia_analizar_biologics():
-    try:
-        data = request.get_json() or {}
-        id_paciente = data.get('id_paciente')
-        observaciones = data.get('observaciones', 'Sin observaciones previas')
-        
-        client = anthropic.Anthropic()
-        response = client.messages.create(
-            model="claude-sonnet-5-5",
-            max_tokens=8192,
-            system="Eres un médico experto en medicina ortomolecular y protocolos Biologics del Instituto Aeterna. Genera una recomendación y análisis clínico avanzado basado en los datos proporcionados.",
-            messages=[{"role": "user", "content": f"Datos del protocolo Biologics:\n{observaciones}\n\nGenera sugerencias de optimización ortomolecular."}]
-        )
-        dictamen_ia = "".join(b.text for b in response.content if hasattr(b, 'text'))
-        return jsonify({"status": "success", "analisis": dictamen_ia})
-    except Exception as e:
-        return jsonify({"status": "error", "analisis": f"Error IA Biologics: {str(e)}"})
-
 @app.route('/api/medico/guardar-biologics', methods=['POST'])
 def guardar_biologics():
     token = request.args.get('token') or request.form.get('token')
@@ -1246,28 +1374,6 @@ def guardar_biologics():
     proto.estado = "Cargado"
     db.session.commit()
     return redirect(url_for('index', token=token, rol='medico', seccion='biologics', id=id_paciente))
-
-# ==========================================
-# REQUERIMIENTO: IA EN MÓDULO ANNOVATOR
-# ==========================================
-@app.route('/api/medico/ia-analizar-annovator', methods=['POST'])
-def ia_analizar_annovator():
-    try:
-        data = request.get_json() or {}
-        id_paciente = data.get('id_paciente')
-        observaciones = data.get('observaciones', 'Sin observaciones previas')
-        
-        client = anthropic.Anthropic()
-        response = client.messages.create(
-            model="claude-sonnet-5-5",
-            max_tokens=8192,
-            system="Eres un experto en innovación terapéutica y medicina de precisión de Annovator (Instituto Aeterna). Proporciona un informe analítico y propuestas de innovación clínica.",
-            messages=[{"role": "user", "content": f"Observaciones Annovator:\n{observaciones}\n\nAnaliza y sugiere abordaje innovador."}]
-        )
-        dictamen_ia = "".join(b.text for b in response.content if hasattr(b, 'text'))
-        return jsonify({"status": "success", "analisis": dictamen_ia})
-    except Exception as e:
-        return jsonify({"status": "error", "analisis": f"Error IA Annovator: {str(e)}"})
 
 @app.route('/api/medico/guardar-annovator', methods=['POST'])
 def guardar_annovator():
