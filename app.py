@@ -731,7 +731,6 @@ PORTAL_GRACIAS_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>
 """
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
@@ -1818,9 +1817,36 @@ def registrar_pago_sifen():
         
     paciente_nombre = request.form.get('paciente', 'Paciente General').strip() or 'Paciente General'
     ruc_cliente = request.form.get('ruc_cliente', '').strip()
+    direccion_cliente = request.form.get('direccion_cliente', '').strip()
+    telefono_cliente = request.form.get('telefono_cliente', '').strip()
+    email_cliente = request.form.get('email_cliente', '').strip()
     concepto_servicio = request.form.get('concepto', 'Consulta / Servicio Médico')
     monto = float(request.form.get('monto', 0))
     metodo = request.form.get('metodo', 'Efectivo')
+    
+    try:
+        tasa_iva = int(request.form.get('iva', 5))
+    except (TypeError, ValueError):
+        tasa_iva = 5
+
+    # Cálculo de IVA según normativa SIFEN (Paraguay)
+    if tasa_iva == 10:
+        i_afec_iva = 1
+        d_sub10, d_sub5, d_sub_exe = monto, 0, 0
+        d_iva10 = round(monto / 11)
+        d_iva5 = 0
+        d_tot_iva = d_iva10
+    elif tasa_iva == 5:
+        i_afec_iva = 1
+        d_sub10, d_sub5, d_sub_exe = 0, monto, 0
+        d_iva10 = 0
+        d_iva5 = round(monto / 21)
+        d_tot_iva = d_iva5
+    else:
+        tasa_iva = 0
+        i_afec_iva = 3
+        d_sub10, d_sub5, d_sub_exe = 0, 0, monto
+        d_iva10, d_iva5, d_tot_iva = 0, 0, 0
     
     ruc_limpio = ""
     dv_limpio = ""
@@ -1840,25 +1866,25 @@ def registrar_pago_sifen():
     establecimiento = "001"
     punto_expedicion = "001"
     num_doc = siguiente_numero_documento(establecimiento, punto_expedicion)
-    monto_str = str(int(monto)) if float(monto).is_integer() else str(monto)
+    
+    # Hora oficial de Paraguay (UTC-3)
+    hora_py = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-3)))
 
     token_mifactu = obtener_token_mifactu()
 
     if token_mifactu:
-        # CORREGIDO: tipOpe con "O" mayúscula según la Guía de Integración (Capítulo 4.1)
         payload_factura = {
             "tipOpe": "1",
             "iTiDE": 1,
             "dEst": establecimiento,
             "dPunExp": punto_expedicion,
             "dNumDoc": num_doc,
-            "dFeEmiDE": datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+            "dFeEmiDE": hora_py.strftime('%Y-%m-%dT%H:%M:%S'),
             "iTipTra": 2, 
             "cMoneOpe": "PYG",
             "iCondOpe": 1,
             "iNatRec": i_nat_rec,
             "dNomRec": paciente_nombre,
-            "dEmailRec": "facturas@example.invalid",
             "enviar_sifen": True,
             "Detalles": [
                 {
@@ -1869,15 +1895,15 @@ def registrar_pago_sifen():
                     "dCantProSer": 1,
                     "dPUniProSer": monto,
                     "dTotopeItem": monto,
-                    "iAfecIVA": 3,
-                    "dTasaIVA": 0
+                    "iAfecIVA": i_afec_iva,
+                    "dTasaIVA": tasa_iva
                 }
             ],
             "Subtotales": [
                 {
-                    "dSub10": 0, "dSub5": 0, "dSubExe": monto,
+                    "dSub10": d_sub10, "dSub5": d_sub5, "dSubExe": d_sub_exe,
                     "dTotOpe": monto, "dTotGralOpe": monto,
-                    "dTotIVA": 0, "dIVA10": 0, "dIVA5": 0
+                    "dTotIVA": d_tot_iva, "dIVA10": d_iva10, "dIVA5": d_iva5
                 }
             ],
             "FormaPago": [
@@ -1889,6 +1915,13 @@ def registrar_pago_sifen():
                 }
             ]
         }
+
+        if direccion_cliente:
+            payload_factura["dDirRec"] = direccion_cliente
+        if telefono_cliente:
+            payload_factura["dTelRec"] = telefono_cliente
+        if email_cliente:
+            payload_factura["dEmailRec"] = email_cliente
 
         if i_nat_rec == 1:
             try:
@@ -1932,9 +1965,9 @@ def registrar_pago_sifen():
         paciente=f"{paciente_nombre} ({ruc_cliente if ruc_cliente else 'Innominado'})"[:150],
         monto=monto,
         metodo=metodo,
-        referencia=f"Servicio: {concepto_servicio}"[:100],
+        referencia=f"Servicio: {concepto_servicio} (IVA {tasa_iva}%)"[:100],
         estado="Completado",
-        fecha=datetime.date.today().strftime('%d/%m/%Y'),
+        fecha=hora_py.strftime('%d/%m/%Y'),
         sifen_status=(estado_sifen or "Procesando")[:250],
         cdc=cdc_generado,
         establecimiento=establecimiento,
