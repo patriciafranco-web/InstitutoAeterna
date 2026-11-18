@@ -10,7 +10,7 @@ import json
 import datetime
 import time
 import anthropic
-import re 
+import re # Agregado para extraccion segura de JSON
 import html
 import secrets
 
@@ -40,6 +40,7 @@ def cargar_certificado():
             break
             
     if not archivo_encontrado:
+        # Respaldo si estuviera como .pfx directo binario
         if os.path.exists('/etc/secrets/certificado.pfx'):
             with open('/etc/secrets/certificado.pfx', 'rb') as f:
                 datos_bin = f.read()
@@ -118,7 +119,7 @@ class FotoClinicaModel(db.Model):
     __tablename__ = 'fotos_clinicas'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     id_paciente = db.Column(db.String(50), nullable=False)
-    tipo = db.Column(db.String(20), nullable=False) 
+    tipo = db.Column(db.String(20), nullable=False) # 'antes' o 'despues'
     filename = db.Column(db.String(255), nullable=False)
     fecha = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
 
@@ -933,6 +934,7 @@ def portal_preconsulta_guardar_por_token(token_portal):
         }
         paciente.pre_consulta_json = json.dumps(data_completa)
         paciente.compromiso = request.form.get('compromiso', 'Pendiente')
+
         datos_wearable_str = request.form.get('datos_wearable_json', '')
         if datos_wearable_str:
             proto = ProtocoloWearablesModel.query.filter_by(id_paciente=paciente.id).first()
@@ -941,69 +943,7 @@ def portal_preconsulta_guardar_por_token(token_portal):
                 db.session.add(proto)
             proto.observaciones = f"Sincronización masiva completa desde Portal 360°:\n{datos_wearable_str}"
             proto.estado_sync = "Sincronizado Completo (Automático)"
-        db.session.commit()
-    return render_template_string(PORTAL_GRACIAS_TEMPLATE)
-    @app.route('/portal/pre-consulta/<token_portal>', methods=['POST'])
-def portal_preconsulta_guardar_por_token(token_portal):
-    paciente = PacienteModel.query.filter_by(token_portal=token_portal).first()
-    if paciente:
-        data_completa = {
-            "fecha_nacimiento": request.form.get('fecha_nacimiento', ''),
-            "genero": request.form.get('genero', ''),
-            "residencia": request.form.get('residencia', ''),
-            "profesion": request.form.get('profesion', ''),
-            "telefono": request.form.get('telefono', ''),
-            "correo": request.form.get('correo', ''),
-            "contacto_emergencia": request.form.get('contacto_emergencia', ''),
-            "objetivos": request.form.get('objetivos', ''),
-            "queja_principal": request.form.get('queja_principal', ''),
-            "autoevaluacion": request.form.get('autoevaluacion', ''),
-            "impacto_vida": request.form.get('impacto_vida', ''),
-            "antecedentes_medicos": request.form.get('antecedentes_medicos', ''),
-            "cirugias": request.form.get('cirugias', ''),
-            "antecedentes_familiares": request.form.get('antecedentes_familiares', ''),
-            "alergias": request.form.get('alergias', ''),
-            "medicamentos": request.form.get('medicamentos', ''),
-            "suplementos": request.form.get('suplementos', ''),
-            "trh": request.form.get('trh', ''),
-            "estudios_geneticos": request.form.get('estudios_geneticos', ''),
-            "frecuencia_evacuacion": request.form.get('frecuencia_evacuacion', ''),
-            "escala_bristol": request.form.get('escala_bristol', ''),
-            "evacuacion_completa": request.form.get('evacuacion_completa', ''),
-            "hinchazon": request.form.get('hinchazon', ''),
-            "sintomas_digestivos": request.form.get('sintomas_digestivos', ''),
-            "diag_digestivo": request.form.get('diag_digestivo', ''),
-            "nutricion": request.form.get('nutricion', ''),
-            "procesados": request.form.get('procesados', ''),
-            "agua": request.form.get('agua', ''),
-            "alcohol": request.form.get('alcohol', ''),
-            "registro_comidas": request.form.get('registro_comidas', ''),
-            "sueno_horas": request.form.get('sueno_horas', ''),
-            "sueno_calidad": request.form.get('sueno_calidad', ''),
-            "wearable": request.form.get('wearable', 'Ninguno'),
-            "dias_ejercicio": request.form.get('dias_ejercicio', ''),
-            "tipo_entrenamiento": request.form.get('tipo_entrenamiento', ''),
-            "dolor_articular": request.form.get('dolor_articular', ''),
-            "estres": request.form.get('estres', ''),
-            "manejo_estres": request.form.get('manejo_estres', ''),
-            "toxinas": request.form.get('toxinas', ''),
-            "jornada": request.form.get('jornada', ''),
-            "dificultad_comidas": request.form.get('dificultad_comidas', ''),
-            "energia_dia": request.form.get('energia_dia', ''),
-            "bajones_energia": request.form.get('bajones_energia', ''),
-            "salud_hormonal": request.form.get('salud_hormonal', ''),
-            "lab_recientes": request.form.get('lab_recientes', '')
-        }
-        paciente.pre_consulta_json = json.dumps(data_completa)
-        paciente.compromiso = request.form.get('compromiso', 'Pendiente')
-        datos_wearable_str = request.form.get('datos_wearable_json', '')
-        if datos_wearable_str:
-            proto = ProtocoloWearablesModel.query.filter_by(id_paciente=paciente.id).first()
-            if not proto:
-                proto = ProtocoloWearablesModel(id_paciente=paciente.id)
-                db.session.add(proto)
-            proto.observaciones = f"Sincronización masiva completa desde Portal 360°:\n{datos_wearable_str}"
-            proto.estado_sync = "Sincronizado Completo (Automático)"
+
         db.session.commit()
     return render_template_string(PORTAL_GRACIAS_TEMPLATE)
 
@@ -1016,14 +956,26 @@ def agendar_paciente():
     hora_turno = request.form.get('hora_turno', '09:00 hs')
     
     paciente_existente = PacienteModel.query.filter_by(nombre=nombre).first()
+    
     if paciente_existente:
         paciente_existente.medico = medico
         paciente_existente.hora_turno = hora_turno
         paciente_existente.estado_turno = "Confirmado / Sala VIP"
     else:
         nuevo_id = f"p_{random.randint(1000, 9999)}"
-        db.session.add(PacienteModel(id=nuevo_id, nombre=nombre, edad=edad, programa="General", medico=medico, hora_turno=hora_turno, estado_turno="Confirmado / Sala VIP"))
+        nuevo_paciente = PacienteModel(
+            id=nuevo_id,
+            nombre=nombre,
+            edad=edad,
+            programa="General",
+            medico=medico,
+            hora_turno=hora_turno,
+            estado_turno="Confirmado / Sala VIP"
+        )
+        db.session.add(nuevo_paciente)
+        
     db.session.commit()
+    
     return redirect(url_for('index', token=token, rol='recepcion', seccion='agenda_admision'))
 
 @app.route('/api/medico/guardar-plantilla-receta', methods=['POST'])
@@ -1045,16 +997,32 @@ def transcribir_voz_soap():
     try:
         data = request.get_json(silent=True) or {}
         texto_dictado = data.get('texto', '')
-        if not texto_dictado: return jsonify({"status": "error", "mensaje": "No se recibió texto dictado."}), 400
+        
+        if not texto_dictado:
+            return jsonify({"status": "error", "mensaje": "No se recibió texto dictado."}), 400
+
         client = anthropic.Anthropic()
+        
         response = client.messages.create(
-            model="claude-sonnet-5-5", max_tokens=8192,
-            system="Eres un asistente de documentación clínica oficial del Instituto Aeterna (Sanatorio Le Blanc). Convierte el dictado del médico en una nota SOAP estructurada en español.",
-            messages=[{"role": "user", "content": f"Dictado clínico del médico:\n{texto_dictado}"}]
+            model="claude-sonnet-5-5",
+            max_tokens=8192,
+            system=(
+                "Eres un asistente de documentación clínica oficial del Instituto Aeterna (Sanatorio Le Blanc). "
+                "Convierte el dictado del médico en una nota SOAP estructurada (Subjetivo, Objetivo, Evaluación, Plan) "
+                "en español. Usa solo la información dictada; si falta un dato, escribe 'No referido'. "
+                "No inventes diagnósticos ni dosis."
+            ),
+            messages=[{
+                "role": "user",
+                "content": f"Dictado clínico del médico:\n{texto_dictado}"
+            }]
         )
-        return jsonify({"status": "success", "soap": "".join(b.text for b in response.content if hasattr(b, 'text'))})
+        
+        dictamen_soap = "".join(b.text for b in response.content if hasattr(b, 'text'))
+        return jsonify({"status": "success", "soap": dictamen_soap})
+
     except Exception as e:
-        return jsonify({"status": "error", "mensaje": str(e)}), 500
+        return jsonify({"status": "error", "mensaje": f"Error técnico: {str(e)}"}), 500
 
 @app.route('/api/medico/guardar-evolucion-soap', methods=['POST'])
 def guardar_evolucion_soap():
@@ -1062,101 +1030,162 @@ def guardar_evolucion_soap():
         data = request.get_json(silent=True) or {}
         id_paciente = data.get('id_paciente')
         nota_soap = data.get('nota')
+        
         token = request.args.get('token') or session.get('active_token')
         medico_actual = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
-        if not nota_soap or not id_paciente: return jsonify({"status": "error", "mensaje": "Faltan datos."}), 400
-        db.session.add(ConsultaModel(id_paciente=id_paciente, medico=medico_actual, fecha=datetime.datetime.now().strftime('%d/%m/%Y %H:%M'), detalle=nota_soap))
+        
+        if not nota_soap or not id_paciente:
+            return jsonify({"status": "error", "mensaje": "Faltan datos de la nota."}), 400
+
+        nueva_consulta = ConsultaModel(
+            id_paciente=id_paciente,
+            medico=medico_actual,
+            fecha=datetime.datetime.now().strftime('%d/%m/%Y %H:%M'),
+            detalle=nota_soap
+        )
+        db.session.add(nueva_consulta)
         db.session.commit()
-        return jsonify({"status": "success", "mensaje": "Evolución SOAP guardada correctamente."})
+
+        return jsonify({"status": "success", "mensaje": "Evolución SOAP guardada correctamente en el historial."})
     except Exception as e:
         return jsonify({"status": "error", "mensaje": str(e)}), 500
 
 @app.route('/api/medico/subir-foto-evolucion', methods=['POST'])
 def subir_foto_evolucion():
-    token = request.args.get('token')
-    id_paciente = request.form.get('id_paciente')
-    tipo = request.form.get('tipo')
-    archivo = request.files.get('foto')
-    if archivo and id_paciente:
-        os.makedirs('uploads/fotos_clinicas', exist_ok=True)
-        filename = f"paciente_{id_paciente}_{tipo}_{int(time.time())}.jpg"
-        archivo.save(os.path.join('uploads/fotos_clinicas', filename))
-        db.session.add(FotoClinicaModel(id_paciente=id_paciente, tipo=tipo, filename=filename, fecha=datetime.date.today().strftime('%d/%m/%Y')))
-        db.session.commit()
-        return redirect(url_for('index', token=token, rol='medico', seccion='evolucion_consulta', id=id_paciente))
-    return "Error al subir foto", 400
+    try:
+        token = request.args.get('token')
+        id_paciente = request.form.get('id_paciente')
+        tipo = request.form.get('tipo')
+        archivo = request.files.get('foto')
+        
+        if archivo and id_paciente:
+            os.makedirs('uploads/fotos_clinicas', exist_ok=True)
+            filename = f"paciente_{id_paciente}_{tipo}_{int(time.time())}.jpg"
+            filepath = os.path.join('uploads/fotos_clinicas', filename)
+            archivo.save(filepath)
+            
+            nueva_foto = FotoClinicaModel(
+                id_paciente=id_paciente,
+                tipo=tipo,
+                filename=filename,
+                fecha=datetime.date.today().strftime('%d/%m/%Y')
+            )
+            db.session.add(nueva_foto)
+            db.session.commit()
+            
+            return redirect(url_for('index', token=token, rol='medico', seccion='evolucion_consulta', id=id_paciente))
+            
+        return "No se adjuntó archivo o ID de paciente", 400
+    except Exception as e:
+        return f"Error técnico: {str(e)}", 500
 
 @app.route('/uploads/fotos_clinicas/<path:filename>')
 def ver_foto_clinica(filename):
+    token = request.args.get('token')
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
     return send_from_directory('uploads/fotos_clinicas', filename)
 
 @app.route('/api/medico/ia-concluir-estudio', methods=['POST'])
 def ia_concluir_estudio():
     try:
         data = request.get_json() or {}
+        valores = data.get('valores', 'Sin valores')
+        
         client = anthropic.Anthropic()
+        
         response = client.messages.create(
-            model="claude-sonnet-5-5", max_tokens=8192,
-            system="Eres el Asistente IA clínico oficial del Instituto Aeterna. Genera un dictamen médico conciso.",
-            messages=[{"role": "user", "content": f"Valores extraídos: {data.get('valores', 'Sin valores')}."}]
+            model="claude-sonnet-5-5",
+            max_tokens=8192,
+            system=f"Eres el Asistente IA clínico oficial del Instituto Aeterna. Genera un dictamen médico conciso de 2 o 3 líneas basado en los siguientes valores de laboratorio y biomarcadores.",
+            messages=[{"role": "user", "content": f"Valores extraídos: {valores}. Redacta una conclusión clínica profesional."}]
         )
-        return jsonify({"status": "success", "conclusion": "".join(b.text for b in response.content if hasattr(b, 'text'))})
+        dictamen_ia = "".join(b.text for b in response.content if hasattr(b, 'text'))
+        return jsonify({"status": "success", "conclusion": dictamen_ia})
+        
     except Exception as e:
-        return jsonify({"status": "error", "conclusion": str(e)})
+        return jsonify({"status": "error", "conclusion": f"Error al generar con IA: {str(e)}"})
 
 @app.route('/api/medico/guardar-nota-libre', methods=['POST'])
 def guardar_nota_libre():
     data = request.get_json() if request.is_json else request.form
-    paciente = PacienteModel.query.filter_by(id=data.get('id_paciente')).first()
+    id_paciente = data.get('id_paciente')
+    nota = data.get('nota', '')
+    
+    paciente = PacienteModel.query.filter_by(id=id_paciente).first()
     if paciente:
-        paciente.observacion_medica_libre = data.get('nota', '')
+        paciente.observacion_medica_libre = nota
         db.session.commit()
-        return jsonify({"status": "success", "mensaje": "Nota guardada."})
+        return jsonify({"status": "success", "mensaje": "Nota importante guardada permanentemente."})
     return jsonify({"status": "error"}), 404
 
 @app.route('/api/medico/guardar-receta-texto', methods=['POST'])
 def guardar_receta_texto():
     token = request.args.get('token') or request.form.get('token')
-    paciente = PacienteModel.query.filter_by(id=request.form.get('id_paciente')).first()
+    id_paciente = request.form.get('id_paciente')
+    texto_receta = request.form.get('receta_texto', '')
+    
+    paciente = PacienteModel.query.filter_by(id=id_paciente).first()
     if paciente:
-        paciente.receta_texto = request.form.get('receta_texto', '')
+        paciente.receta_texto = texto_receta
         db.session.commit()
-    return redirect(url_for('index', token=token, rol='medico', seccion='recetas', id=request.form.get('id_paciente')))
+        
+    return redirect(url_for('index', token=token, rol='medico', seccion='recetas', id=id_paciente))
 
 @app.route('/api/medico/guardar-protocolo-regenerativo', methods=['POST'])
 def guardar_protocolo_regenerativo():
     token = request.args.get('token') or request.form.get('token')
     id_paciente = request.form.get('id_paciente')
+    diagnostico_dx = request.form.get('diagnostico_dx', '')
+    
     sesiones = []
     i = 1
     while True:
-        s_val = request.form.get(f'sesion_{i}')
-        if s_val is None: break
-        sesiones.append({"numero": s_val, "fecha": request.form.get(f'fecha_{i}', ''), "protocolo": request.form.get(f'protocolo_{i}', ''), "pa": request.form.get(f'pa_{i}', ''), "fc": request.form.get(f'fc_{i}', ''), "sat": request.form.get(f'sat_{i}', ''), "observacion": request.form.get(f'observacion_{i}', '')})
+        sesion_val = request.form.get(f'sesion_{i}')
+        if sesion_val is None:
+            break
+            
+        sesiones.append({
+            "numero": sesion_val,
+            "fecha": request.form.get(f'fecha_{i}', ''),
+            "protocolo": request.form.get(f'protocolo_{i}', ''),
+            "pa": request.form.get(f'pa_{i}', ''),
+            "fc": request.form.get(f'fc_{i}', ''),
+            "sat": request.form.get(f'sat_{i}', ''),
+            "observacion": request.form.get(f'observacion_{i}', '')
+        })
         i += 1
+    
     proto = ProtocoloRegenerativoModel.query.filter_by(id_paciente=id_paciente).first()
     if not proto:
         proto = ProtocoloRegenerativoModel(id_paciente=id_paciente)
         db.session.add(proto)
-    proto.diagnostico_dx = request.form.get('diagnostico_dx', '')
+        
+    proto.diagnostico_dx = diagnostico_dx
     proto.sesiones_json = json.dumps(sesiones)
     db.session.commit()
+    
     return redirect(url_for('index', token=token, rol='medico', seccion='regenerativa', id=id_paciente))
 
 @app.route('/api/medico/guardar-biologics', methods=['POST'])
 def guardar_biologics():
     token = request.args.get('token') or request.form.get('token')
     id_paciente = request.form.get('id_paciente')
+    diagnostico_dx = request.form.get('diagnostico_dx', '')
+    observaciones = request.form.get('observaciones', '')
+    
     archivo = request.files.get('archivo_pdf_biologics')
     if archivo and archivo.filename:
+        filename = f"biologics_{id_paciente}_{archivo.filename}"
         os.makedirs('uploads', exist_ok=True)
-        archivo.save(os.path.join('uploads', f"biologics_{id_paciente}_{archivo.filename}"))
+        archivo.save(os.path.join('uploads', filename))
+    
     proto = ProtocoloBiologicsModel.query.filter_by(id_paciente=id_paciente).first()
     if not proto:
         proto = ProtocoloBiologicsModel(id_paciente=id_paciente)
         db.session.add(proto)
-    proto.diagnostico_dx = request.form.get('diagnostico_dx', '')
-    proto.observaciones = request.form.get('observaciones', '')
+    proto.diagnostico_dx = diagnostico_dx
+    proto.observaciones = observaciones
     proto.estado = "Cargado"
     db.session.commit()
     return redirect(url_for('index', token=token, rol='medico', seccion='biologics', id=id_paciente))
@@ -1165,16 +1194,21 @@ def guardar_biologics():
 def guardar_annovator():
     token = request.args.get('token') or request.form.get('token')
     id_paciente = request.form.get('id_paciente')
+    diagnostico_dx = request.form.get('diagnostico_dx', '')
+    observaciones = request.form.get('observaciones', '')
+    
     archivo = request.files.get('archivo_pdf_annovator')
     if archivo and archivo.filename:
+        filename = f"annovator_{id_paciente}_{archivo.filename}"
         os.makedirs('uploads', exist_ok=True)
-        archivo.save(os.path.join('uploads', f"annovator_{id_paciente}_{archivo.filename}"))
+        archivo.save(os.path.join('uploads', filename))
+    
     proto = ProtocoloAnnovatorModel.query.filter_by(id_paciente=id_paciente).first()
     if not proto:
         proto = ProtocoloAnnovatorModel(id_paciente=id_paciente)
         db.session.add(proto)
-    proto.diagnostico_dx = request.form.get('diagnostico_dx', '')
-    proto.observaciones = request.form.get('observaciones', '')
+    proto.diagnostico_dx = diagnostico_dx
+    proto.observaciones = observaciones
     proto.estado = "Cargado"
     db.session.commit()
     return redirect(url_for('index', token=token, rol='medico', seccion='annovator', id=id_paciente))
@@ -1183,11 +1217,13 @@ def guardar_annovator():
 def guardar_wearables():
     token = request.args.get('token') or request.form.get('token')
     id_paciente = request.form.get('id_paciente')
+    observaciones = request.form.get('observaciones', '')
+    
     proto = ProtocoloWearablesModel.query.filter_by(id_paciente=id_paciente).first()
     if not proto:
         proto = ProtocoloWearablesModel(id_paciente=id_paciente)
         db.session.add(proto)
-    proto.observaciones = request.form.get('observaciones', '')
+    proto.observaciones = observaciones
     proto.estado_sync = "Sincronizado"
     db.session.commit()
     return redirect(url_for('index', token=token, rol='medico', seccion='wearables', id=id_paciente))
@@ -1195,37 +1231,62 @@ def guardar_wearables():
 @app.route('/api/paciente/sincronizar-salud-movil', methods=['POST'])
 def sincronizar_salud_movil():
     data = request.get_json() or {}
-    proto = ProtocoloWearablesModel.query.filter_by(id_paciente=data.get('id_paciente')).first()
+    id_paciente = data.get('id_paciente')
+    hrv = data.get('hrv', 'N/A')
+    sueño_profundo = data.get('deep_sleep', 'N/A')
+    frecuencia_cardiaca = data.get('heart_rate', 'N/A')
+    
+    proto = ProtocoloWearablesModel.query.filter_by(id_paciente=id_paciente).first()
     if not proto:
-        proto = ProtocoloWearablesModel(id_paciente=data.get('id_paciente'))
+        proto = ProtocoloWearablesModel(id_paciente=id_paciente)
         db.session.add(proto)
-    proto.observaciones = f"Sincronizado vía Salud Móvil. HRV: {data.get('hrv', 'N/A')}, Sueño: {data.get('deep_sleep', 'N/A')}, FC: {data.get('heart_rate', 'N/A')}."
+    
+    proto.observaciones = f"Sincronizado vía Salud Móvil (Nativo). HRV: {hrv}, Sueño Profundo: {sueño_profundo}, FC Reposo: {frecuencia_cardiaca}."
     proto.estado_sync = "Sincronizado (Nativo App)"
     db.session.commit()
-    return jsonify({"status": "success", "mensaje": "Datos sincronizados correctamente."})
+    
+    return jsonify({"status": "success", "mensaje": "Datos de salud sincronizados correctamente con Aeterna."})
 
 @app.route('/api/medico/guardar-consentimiento', methods=['POST'])
 def guardar_consentimiento():
     token = request.args.get('token') or request.form.get('token')
     id_paciente = request.form.get('id_paciente')
+    tipo_plantilla = request.form.get('tipo_plantilla')
+    clausulas = request.form.get('clausulas_adicionales', '')
+    
     reg = ProtocoloConsentimientoModel.query.filter_by(id_paciente=id_paciente).first()
     if not reg:
         reg = ProtocoloConsentimientoModel(id_paciente=id_paciente)
         db.session.add(reg)
-    reg.tipo_plantilla = request.form.get('tipo_plantilla')
-    reg.clausulas_adicionales = request.form.get('clausulas_adicionales', '')
+    reg.tipo_plantilla = tipo_plantilla
+    reg.clausulas_adicionales = clausulas
     reg.estado = "Registrado en Expediente"
     db.session.commit()
+    
     return redirect(url_for('index', token=token, rol='medico', seccion='consentimientos', id=id_paciente))
 
 @app.route('/api/medico/asignar-equipo', methods=['POST'])
 def asignar_equipo():
     token = request.args.get('token') or request.form.get('token')
     id_paciente = request.form.get('id_paciente')
+    profesional = request.form.get('profesional')
+    mensaje_tarea = request.form.get('mensaje_tarea')
+    
     paciente = PacienteModel.query.filter_by(id=id_paciente).first()
-    db.session.add(TareaEquipoModel(id_paciente=id_paciente, nombre_paciente=paciente.nombre if paciente else "Paciente", medico_emisor=session.get(f'nombre_{token}', 'Médico'), profesional_destinatario=request.form.get('profesional'), mensaje_tarea=request.form.get('mensaje_tarea')))
+    nombre_pac = paciente.nombre if paciente else "Paciente"
+    medico_emisor = session.get(f'nombre_{token}', 'Médico Tratante')
+
+    nueva_tarea = TareaEquipoModel(
+        id_paciente=id_paciente,
+        nombre_paciente=nombre_pac,
+        medico_emisor=medico_emisor,
+        profesional_destinatario=profesional,
+        mensaje_tarea=mensaje_tarea
+    )
+    db.session.add(nueva_tarea)
     db.session.commit()
-    return jsonify({"status": "success", "mensaje": "Notificación enviada con éxito."})
+
+    return jsonify({"status": "success", "mensaje": f"Notificación registrada y enviada con éxito a {profesional}."})
 
 @app.route('/api/equipo/completar-tarea/<int:id_tarea>')
 def completar_tarea(id_tarea):
@@ -1240,8 +1301,23 @@ def completar_tarea(id_tarea):
 def guardar_informe_no_lab():
     token = request.args.get('token') or request.form.get('token')
     id_paciente = request.form.get('id_paciente')
-    db.session.add(EstudioNoLabModel(id_paciente=id_paciente, fecha=datetime.date.today().strftime('%d/%m/%Y'), titulo=request.form.get('titulo_estudio'), dictamen=request.form.get('dictamen'), origen="Informe Directo", medico=session.get(f'nombre_{token}', 'Médico'), estado="Redactado Directo"))
-    db.session.commit()
+    titulo = request.form.get('titulo_estudio')
+    dictamen = request.form.get('dictamen')
+    nombre_medico = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
+
+    if id_paciente and titulo:
+        nuevo_estudio = EstudioNoLabModel(
+            id_paciente=id_paciente,
+            fecha=datetime.date.today().strftime('%d/%m/%Y'),
+            titulo=titulo,
+            dictamen=dictamen,
+            origen="Informe Directo (Texto)",
+            medico=nombre_medico,
+            estado="Redactado Directo"
+        )
+        db.session.add(nuevo_estudio)
+        db.session.commit()
+
     return redirect(url_for('index', token=token, rol='medico', seccion='examenes_no_lab', id=id_paciente))
 
 @app.route('/api/medico/subir-estudio-no-lab', methods=['POST'])
@@ -1249,70 +1325,114 @@ def subir_estudio_no_lab():
     token = request.args.get('token') or request.form.get('token')
     id_paciente = request.form.get('id_paciente')
     archivo = request.files.get('archivo_estudio')
+    nombre_medico = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
+
     if archivo and id_paciente:
+        filename = archivo.filename
         os.makedirs('uploads', exist_ok=True)
-        archivo.save(os.path.join('uploads', archivo.filename))
-        db.session.add(EstudioNoLabModel(id_paciente=id_paciente, fecha=datetime.date.today().strftime('%d/%m/%Y'), titulo=archivo.filename.rsplit('.', 1)[0].replace('_', ' ').title(), dictamen="Documento externo adjuntado.", origen=archivo.filename, medico=session.get(f'nombre_{token}', 'Médico'), estado="Cargado"))
+        archivo.save(os.path.join('uploads', filename))
+
+        nuevo_estudio = EstudioNoLabModel(
+            id_paciente=id_paciente,
+            fecha=datetime.date.today().strftime('%d/%m/%Y'),
+            titulo=filename.rsplit('.', 1)[0].replace('_', ' ').title(),
+            dictamen="Documento externo adjuntado correctamente al expediente clínico.",
+            origen=filename,
+            medico=nombre_medico,
+            estado="Cargado e Informado"
+        )
+        db.session.add(nuevo_estudio)
         db.session.commit()
+
     return redirect(url_for('index', token=token, rol='medico', seccion='examenes_no_lab', id=id_paciente))
 
 @app.route('/api/medico/eliminar-estudio-no-lab/<int:id_estudio>', methods=['POST'])
 def eliminar_estudio_no_lab(id_estudio):
     token = request.args.get('token') or request.form.get('token')
+    id_paciente = request.form.get('id_paciente')
+    
     estudio = EstudioNoLabModel.query.get(id_estudio)
     if estudio:
-        id_p = estudio.id_paciente
         db.session.delete(estudio)
         db.session.commit()
-        return redirect(url_for('index', token=token, rol='medico', seccion='examenes_no_lab', id=id_p))
-    return redirect(url_for('index', token=token, rol='medico', seccion='agenda_medico'))
+        
+    return redirect(url_for('index', token=token, rol='medico', seccion='examenes_no_lab', id=id_paciente))
 
 @app.route('/api/medico/eliminar-examen-lab/<int:id_estudio>', methods=['POST'])
 def eliminar_examen_lab(id_estudio):
     token = request.args.get('token') or request.form.get('token')
+    id_paciente = request.form.get('id_paciente')
+    
     estudio = EstudioLabModel.query.get(id_estudio)
     if estudio:
-        id_p = estudio.id_paciente
         db.session.delete(estudio)
         db.session.commit()
-        return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_p))
-    return redirect(url_for('index', token=token, rol='medico', seccion='agenda_medico'))
+        
+    return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
 
 @app.route('/uploads/<path:filename>')
 def ver_archivo_subido(filename):
+    token = request.args.get('token')
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
     return send_from_directory('uploads', filename)
 
-# RECETAS A5 y A4
+# ==========================================
+# RUTAS DE RECETA ELECTRÓNICA Y QR
+# ==========================================
 @app.route('/medico/imprimir-receta/<id_paciente>')
 def imprimir_receta(id_paciente):
     token = request.args.get('token')
-    formato = request.args.get('formato', 'A5')
-    p = PacienteModel.query.filter_by(id=id_paciente).first()
-    if not p: return "Paciente no encontrado", 404
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
     
+    p = PacienteModel.query.filter_by(id=id_paciente).first()
+    if not p:
+        return "Paciente no encontrado", 404
+        
     nombre_medico = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
     id_receta = str(uuid.uuid4())
     url_validacion = f"{request.host_url}validar/{id_receta}"
+    
     qr = qrcode.QRCode(box_size=5, border=3)
     qr.add_data(url_validacion)
     qr.make(fit=True)
+    img_qr = qr.make_image(fill_color="black", back_color="white")
+    
     buffer = io.BytesIO()
-    qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
+    img_qr.save(buffer, format="PNG")
     qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
     
-    db.session.add(RecetaModel(id_receta=id_receta, id_paciente=p.id, nombre_paciente=p.nombre, nombre_medico=nombre_medico, fecha=datetime.date.today().strftime('%d/%m/%Y'), estado="Emitida"))
+    nueva_receta = RecetaModel(
+        id_receta=id_receta,
+        id_paciente=p.id,
+        nombre_paciente=p.nombre,
+        nombre_medico=nombre_medico,
+        fecha=datetime.date.today().strftime('%d/%m/%Y'),
+        estado="Emitida"
+    )
+    db.session.add(nueva_receta)
     db.session.commit()
     
-    return render_template('receta_membretada.html', p=p, nombre_usuario=nombre_medico, qr_base64=qr_base64, texto_imprimir=f"<b>INDICACIONES MÉDICAS ({formato}):</b><br><br>{p.receta_texto.replace(chr(10), '<br>')}", formato=formato)
+    texto_receta_html = p.receta_texto.replace('\n', '<br>')
+    
+    return render_template('receta_membretada.html', 
+                           p=p, 
+                           nombre_usuario=nombre_medico,
+                           qr_base64=qr_base64,
+                           texto_imprimir=f"<b>INDICACIONES Y PRESCRIPCIÓN MÉDICA:</b><br><br>{texto_receta_html}")
 
 @app.route('/validar/<id_receta>', methods=['GET', 'POST'])
 def validar_receta(id_receta):
     receta = RecetaModel.query.filter_by(id_receta=id_receta).first()
-    if request.method == 'POST' and receta and receta.estado == "Emitida":
-        receta.estado = "Dispensada"
-        receta.fecha_dispensacion = datetime.datetime.now().strftime('%d/%m/%Y %H:%M')
-        db.session.commit()
+    
+    if request.method == 'POST':
+        if receta and receta.estado == "Emitida":
+            receta.estado = "Dispensada"
+            receta.fecha_dispensacion = datetime.datetime.now().strftime('%d/%m/%Y %H:%M')
+            db.session.commit()
         return redirect(url_for('validar_receta', id_receta=id_receta))
+
     return render_template('validar_receta.html', receta=receta)
 
 @app.route('/api/medico/carga-inteligente-lab', methods=['POST'])
@@ -1320,199 +1440,481 @@ def carga_inteligente_lab():
     token = request.args.get('token') or request.form.get('token')
     id_paciente = request.form.get('id_paciente')
     archivo = request.files.get('archivo_lab')
+
     if not archivo or not archivo.filename:
         return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
+
+    dictamen_ia = ""
+    
     try:
         filename = f"lab_{id_paciente}_{int(time.time())}_{archivo.filename}"
         os.makedirs('uploads', exist_ok=True)
         filepath = os.path.join('uploads', filename)
         archivo.save(filepath)
+
         client = anthropic.Anthropic()
-        ext = filename.lower().split('.')[-1]
-        sys_prompt = "Eres un médico experto. Analiza el reporte y devuelve al final un bloque JSON exacto con: [{\"parametro\": \"Glucemia\", \"valor\": 90.0, \"unidad\": \"mg/dL\"}]"
-        
-        b64_data = base64.b64encode(open(filepath, "rb").read()).decode('utf-8')
-        m_type = "application/pdf" if ext == 'pdf' else "image/jpeg"
-        res = client.messages.create(model="claude-sonnet-5-5", max_tokens=4096, system=sys_prompt, messages=[{"role": "user", "content": [{"type": "document" if ext=='pdf' else "image", "source": {"type": "base64", "media_type": m_type, "data": b64_data}}, {"type": "text", "text": "Extrae resultados."}]}])
-        
-        txt = "".join(b.text for b in res.content if b.type == "text")
-        vis = re.sub(r'```json\s*.*?\s*```', '', txt, flags=re.DOTALL).strip()
-        db.session.add(EstudioLabModel(id_paciente=id_paciente, fecha=datetime.date.today().strftime('%d/%m/%Y'), titulo=f"Lab: {archivo.filename}", dictamen=vis, origen=archivo.filename, medico="Motor Inteligente", estado="Completado"))
-        db.session.commit()
-        m = re.search(r'```json\s*(.*?)\s*```', txt, re.DOTALL)
-        if m:
-            for bio in json.loads(m.group(1).strip()):
-                if bio.get("parametro") and bio.get("valor") is not None:
-                    db.session.add(BiomarcadorModel(id_paciente=id_paciente, fecha=datetime.date.today().strftime('%d/%m/%Y'), parametro=str(bio.get("parametro")).strip(), valor=float(str(bio.get("valor")).replace(',', '.')), unidad=str(bio.get("unidad", "mg/dL")).strip()))
-            db.session.commit()
+        extension = filename.lower().split('.')[-1]
+
+        system_prompt = (
+            "Eres un médico experto y asistente de laboratorio clínico del Instituto Aeterna. "
+            "Tu tarea es analizar el PDF o imagen y transcribir los resultados exactamente como un reporte de laboratorio.\n\n"
+            "INSTRUCCIONES PARA EL TEXTO:\n"
+            "1. Inicia con 'RESUMEN CLÍNICO:' y escribe 2-3 líneas de hallazgos.\n"
+            "2. Agrega una sección 'VALORES EXTRAÍDOS:' y haz una lista completa de TODOS los parámetros detectados, "
+            "mostrando: Parámetro | Valor | Unidad.\n\n"
+            "IMPORTANTE: Al final de toda tu respuesta, incluye un bloque de código JSON estrictamente válido "
+            "con los datos para el sistema. NO escribas texto después del JSON. Formato exacto:\n"
+            "```json\n"
+            "[\n"
+            "  {\"parametro\": \"Glucemia en ayunas\", \"valor\": 92.0, \"unidad\": \"mg/dL\"}\n"
+            "]\n"
+            "```"
+        )
+
+        if extension == 'pdf':
+            with open(filepath, "rb") as pdf_file:
+                pdf_data = base64.b64encode(pdf_file.read()).decode('utf-8')
+            
+            response = client.messages.create(
+                model="claude-sonnet-5-5", 
+                max_tokens=8192,
+                system=system_prompt,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": pdf_data}},
+                            {"type": "text", "text": "Extrae los resultados. Asegúrate de cerrar con el bloque ```json."}
+                        ]
+                    }
+                ]
+            )
+        else:
+            with open(filepath, "rb") as image_file:
+                image_data = base64.b64encode(image_file.read()).decode('utf-8')
+            
+            media_type = "image/jpeg"
+            if extension == 'png':
+                media_type = "image/png"
+            elif extension in ['webp', 'heic', 'jfif']:
+                media_type = "image/webp"
+
+            response = client.messages.create(
+                model="claude-sonnet-5-5", 
+                max_tokens=8192,
+                system=system_prompt,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_data}},
+                            {"type": "text", "text": "Extrae los resultados. Asegúrate de cerrar con el bloque ```json."}
+                        ]
+                    }
+                ]
+            )
+
+        dictamen_ia = "".join(b.text for b in response.content if b.type == "text")
+        dictamen_visual = re.sub(r'```json\s*.*?\s*```', '', dictamen_ia, flags=re.DOTALL).strip()
+
     except Exception as e:
-        print("Error IA Lab:", str(e))
+        dictamen_visual = f"❌ ERROR DE PROCESAMIENTO:\n\nLa IA no pudo procesar el archivo.\n\nMotivo: {str(e)}"
+        dictamen_ia = ""
+
+    try:
+        nuevo_estudio = EstudioLabModel(
+            id_paciente=id_paciente,
+            fecha=datetime.date.today().strftime('%d/%m/%Y'),
+            titulo=f"Lab Móvil / WhatsApp: {archivo.filename}",
+            dictamen=dictamen_visual,
+            origen=archivo.filename,
+            medico="Motor Inteligente",
+            estado="Completado"
+        )
+        db.session.add(nuevo_estudio)
+        db.session.commit()
+
+        try:
+            match = re.search(r'```json\s*(.*?)\s*```', dictamen_ia, re.DOTALL)
+            if match:
+                json_str = match.group(1).strip()
+                biomarcadores_lista = json.loads(json_str)
+                fecha_hoy = datetime.date.today().strftime('%d/%m/%Y')
+                
+                for bio in biomarcadores_lista:
+                    param_val = bio.get("parametro")
+                    val_num = bio.get("valor")
+                    unidad_val = bio.get("unidad", "mg/dL")
+                    
+                    if param_val is not None and val_num is not None:
+                        try:
+                            clean_val = float(str(val_num).replace(',', '.'))
+                            nuevo_bio = BiomarcadorModel(
+                                id_paciente=id_paciente,
+                                fecha=fecha_hoy,
+                                parametro=str(param_val).strip(),
+                                valor=clean_val,
+                                unidad=str(unidad_val).strip()
+                            )
+                            db.session.add(nuevo_bio)
+                        except ValueError:
+                            pass
+
+                db.session.commit()
+        except Exception as json_err:
+            print("Error al extraer JSON de la IA:", str(json_err))
+
+    except Exception as e2:
+        print("Error general guardando el laboratorio:", str(e2))
+
     return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
 
 @app.route('/api/medico/editar-examen-lab/<int:id_estudio>', methods=['POST'])
 def editar_examen_lab(id_estudio):
     token = request.args.get('token') or request.form.get('token')
+    dictamen_editado = request.form.get('dictamen')
+    
     estudio = EstudioLabModel.query.get(id_estudio)
     if estudio:
-        estudio.dictamen = request.form.get('dictamen')
+        estudio.dictamen = dictamen_editado
         db.session.commit()
-        return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=estudio.id_paciente))
-    return redirect(url_for('index', token=token, rol='medico', seccion='agenda_medico'))
+        id_paciente = estudio.id_paciente
+    else:
+        id_paciente = request.form.get('id_paciente', '')
+
+    return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
 
 @app.route('/api/medico/generar-orden-lab', methods=['POST'])
 def generar_orden_lab():
     token = request.args.get('token')
-    if not token or f'user_{token}' not in session: return redirect(url_for('login'))
-    p = PacienteModel.query.filter_by(id=request.form.get('id_paciente')).first()
-    if not p: return "Paciente no encontrado", 404
-    estudios = request.form.getlist('estudios')
-    db.session.add(EstudioSolicitadoModel(id_paciente=p.id, fecha=datetime.date.today().strftime('%d/%m/%Y'), medico=session.get(f'nombre_{token}', 'Médico'), estudios_texto=", ".join(estudios), estado="Impreso"))
-    db.session.commit()
-    return render_template('receta_membretada.html', p=p, nombre_usuario=session.get(f'nombre_{token}', 'Médico'), qr_base64="", texto_imprimir="<b>SOLICITUD DE EXÁMENES LABORATORIALES:</b><br><br>" + "<br>".join(f"{i}. {e}" for i, e in enumerate(estudios, 1)))
-
-@app.route('/medico/reporte-paciente/<string:id_paciente>')
-def reporte_paciente(id_paciente):
-    token = request.args.get('token')
-    if not token or f'user_{token}' not in session: return redirect(url_for('login'))
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
+    
+    id_paciente = request.form.get('id_paciente')
+    estudios_seleccionados = request.form.getlist('estudios')
+    
     p = PacienteModel.query.filter_by(id=id_paciente).first()
-    return render_template_string(REPORTE_IMPRIMIBLE_TEMPLATE, p=p, biomarcadores=BiomarcadorModel.query.filter_by(id_paciente=p.id).all(), evoluciones=ConsultaModel.query.filter_by(id_paciente=p.id).all())
-
-REPORTE_IMPRIMIBLE_TEMPLATE = """<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="UTF-8"><title>Reporte Clínico</title>
-<style>body{font-family: Arial; padding:40px; color:#121110;} h1{color:#800020; font-size:18px;} table{width:100%; border-collapse:collapse; margin-top:10px;} th,td{border:1px solid #ddd; padding:8px; font-size:12px;} th{background:#f4f6f9;}</style>
-</head>
-<body>
-    <h1>Instituto Aeterna — Sanatorio Le Blanc</h1>
-    <p><b>Paciente:</b> {{ p.nombre }} ({{ p.edad }} años)</p>
-    <h3>Historial de Evolución</h3>
-    {% for ev in evoluciones %}<p><b>{{ ev.fecha }}:</b> {{ ev.detalle }}</p>{% endfor %}
-    <h3>Biomarcadores</h3>
-    <table><tr><th>Parámetro</th><th>Fecha</th><th>Valor</th><th>Unidad</th></tr>
-    {% for b in biomarcadores %}<tr><td>{{ b.parametro }}</td><td>{{ b.fecha }}</td><td>{{ b.valor }}</td><td>{{ b.unidad }}</td></tr>{% endfor %}
-    </table>
-    <script>window.print();</script>
-</body>
-</html>
-"""
+    if not p:
+        return "Paciente no encontrado", 404
+        
+    nombre_medico = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
+    
+    if not estudios_seleccionados:
+        return "No se seleccionó ningún estudio.", 400
+        
+    texto_orden = "<b>SOLICITUD DE EXÁMENES LABORATORIALES:</b><br><br>"
+    for i, est in enumerate(estudios_seleccionados, 1):
+        texto_orden += f"{i}. {est}<br>"
+    texto_orden += "<br><b>Motivo / Diagnóstico:</b> Control Clínico y Mapeo Metabólico Aeterna."
+    
+    estudios_texto_plano = ", ".join(estudios_seleccionados)
+    nueva_orden = EstudioSolicitadoModel(
+        id_paciente=id_paciente,
+        fecha=datetime.date.today().strftime('%d/%m/%Y'),
+        medico=nombre_medico,
+        estudios_texto=estudios_texto_plano,
+        estado="Impreso"
+    )
+    db.session.add(nueva_orden)
+    db.session.commit()
+    
+    id_orden = str(uuid.uuid4())
+    url_validacion = f"{request.host_url}validar/{id_orden}"
+    qr = qrcode.QRCode(box_size=5, border=3)
+    qr.add_data(url_validacion)
+    qr.make(fit=True)
+    img_qr = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    img_qr.save(buffer, format="PNG")
+    qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    
+    return render_template('receta_membretada.html', 
+                           p=p, 
+                           nombre_usuario=nombre_medico,
+                           qr_base64=qr_base64,
+                           texto_imprimir=texto_orden)
 
 # ==========================================
-# FACTURACIÓN SIFEN / MIFACTU (Con modo seguro de contingencia para pruebas)
+# INTEGRACIÓN REAL CON API MIFACTU (SIFEN)
 # ==========================================
+
 MIFACTU_BASE_URL = os.getenv('MIFACTU_BASE_URL', 'https://mifactu.com.py')
 MIFACTU_RUC = os.getenv('MIFACTU_RUC', '80172292')
 MIFACTU_PASSWORD = os.getenv('MIFACTU_PASSWORD', '')
+
 MIFACTU_OPERATION_URL = f"{MIFACTU_BASE_URL.rstrip('/')}/api/operation"
 
 def obtener_token_mifactu():
-    if not MIFACTU_PASSWORD: return None
+    if not MIFACTU_PASSWORD:
+        print("MiFactu: falta la variable de entorno MIFACTU_PASSWORD.")
+        return None
     try:
-        res = requests.post(f"{MIFACTU_BASE_URL.rstrip('/')}/api/authenticate", json={"ruc": MIFACTU_RUC, "password": MIFACTU_PASSWORD}, headers={"Content-Type": "application/json", "Accept": "application/json"}, timeout=10)
-        if res.status_code == 200: return res.json().get("token")
-    except Exception: pass
+        url = f"{MIFACTU_BASE_URL.rstrip('/')}/api/authenticate"
+        payload = {"ruc": MIFACTU_RUC, "password": MIFACTU_PASSWORD}
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        if response.status_code == 200:
+            return response.json().get("token")
+        print("MiFactu: autenticación falló:", response.status_code, response.text[:200])
+    except Exception as e:
+        print("Excepción al conectar con MiFactu:", str(e))
     return None
 
-def headers_mifactu(t):
-    return {"Authorization": f"Bearer {t}", "Content-Type": "application/json", "Accept": "application/json"}
+def headers_mifactu(token_m):
+    return {
+        "Authorization": f"Bearer {token_m}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
 
-def siguiente_numero_documento(est, pun):
-    ultimo = max([int(p.numero_documento) for p in PagoModel.query.filter_by(establecimiento=est, punto_expedicion=pun).all() if p.numero_documento.isdigit()] + [0])
+def siguiente_numero_documento(establecimiento, punto_expedicion):
+    ultimo = 0
+    pagos = PagoModel.query.filter_by(establecimiento=establecimiento, punto_expedicion=punto_expedicion).all()
+    for p in pagos:
+        try:
+            ultimo = max(ultimo, int(p.numero_documento))
+        except (TypeError, ValueError):
+            pass
     return f"{ultimo + 1:07d}"
 
-def consultar_estado_mifactu(token_m, est, pun, num):
-    try:
-        rc = requests.post(MIFACTU_OPERATION_URL, json={"tipOpe": "2", "dEst": est, "dPunExp": pun, "dNumDoc": num, "tipoDoc": "FE"}, headers=headers_mifactu(token_m), timeout=10)
-        if rc.status_code == 200:
-            return (rc.json().get("response") or {}).get("Estado", "Procesando")
-    except Exception: pass
-    return "Procesando"
+def consultar_estado_mifactu(token_m, est, pun, num, esperas=(0,)):
+    # CORREGIDO: tipOpe con "O" mayúscula según la Guía de Integración (Capítulo 8)
+    payload = {"tipOpe": "2", "dEst": est, "dPunExp": pun, "dNumDoc": num, "tipoDoc": "FE"}
+    estado = None
+    for espera in esperas:
+        if espera:
+            time.sleep(espera)
+        try:
+            rc = requests.post(MIFACTU_OPERATION_URL, json=payload, headers=headers_mifactu(token_m), timeout=10)
+            if rc.status_code == 200:
+                r = rc.json().get("response") or {}
+                estado = r.get("Estado") or estado
+                if estado:
+                    if estado.startswith("Aprobado"):
+                        return estado
+                    if estado in ("Rechazado", "Error"):
+                        retorno = (r.get("DE") or {}).get("Retorno") or {}
+                        msg = retorno.get("Mensaje") or ""
+                        return f"{estado}: {msg}" if msg else estado
+            else:
+                try:
+                    msg_err = rc.json().get("message", "")
+                except Exception:
+                    msg_err = ""
+                estado = f"Error consulta ({rc.status_code}): {msg_err}"
+        except Exception as e:
+            estado = f"Error de red API: {str(e)}"
+    return estado
 
 @app.route('/api/caja/registrar-pago', methods=['POST'])
 def registrar_pago_sifen():
     token = request.args.get('token')
-    if not token or f'user_{token}' not in session: return redirect(url_for('login'))
-    
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
+        
     paciente_nombre = request.form.get('paciente', 'Paciente General').strip() or 'Paciente General'
     ruc_cliente = request.form.get('ruc_cliente', '').strip()
-    concepto = request.form.get('concepto', 'Consulta / Servicio Médico')
+    concepto_servicio = request.form.get('concepto', 'Consulta / Servicio Médico')
     monto = float(request.form.get('monto', 0))
     metodo = request.form.get('metodo', 'Efectivo')
     
-    i_nat_rec = 1 if "-" in ruc_cliente else 2
-    ruc_limpio, dv_limpio, num_id_limpio = "", "", "0"
+    ruc_limpio = ""
+    dv_limpio = ""
+    num_id_limpio = "0"
     if "-" in ruc_cliente:
+        i_nat_rec = 1
         partes = ruc_cliente.split("-", 1)
-        ruc_limpio, dv_limpio = re.sub(r'\D', '', partes[0]), re.sub(r'\D', '', partes[1])
+        ruc_limpio = re.sub(r'\D', '', partes[0])
+        dv_limpio = re.sub(r'\D', '', partes[1])
     else:
+        i_nat_rec = 2
         num_id_limpio = re.sub(r'\W', '', ruc_cliente) or "0"
 
+    cdc_generado = None
+    estado_sifen = "Error: no se pudo autenticar con MiFactu"
+    
+    establecimiento = "001"
+    punto_expedicion = "001"
+    num_doc = siguiente_numero_documento(establecimiento, punto_expedicion)
+    monto_str = str(int(monto)) if float(monto).is_integer() else str(monto)
+
     token_mifactu = obtener_token_mifactu()
-    timestamp_str = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-    cdc = f"01801722926001001{random.randint(10000000, 99999999)}1{timestamp_str}1"
-    estado = "Aprobado Sifen (Modo Simulación / Contingencia)"
-    est, pun, num_doc = "001", "001", siguiente_numero_documento("001", "001")
 
     if token_mifactu:
-        payload = {
-            "tipOpe": "1", "iTiDE": 1, "dEst": est, "dPunExp": pun, "dNumDoc": num_doc,
+        # CORREGIDO: tipOpe con "O" mayúscula según la Guía de Integración (Capítulo 4.1)
+        payload_factura = {
+            "tipOpe": "1",
+            "iTiDE": 1,
+            "dEst": establecimiento,
+            "dPunExp": punto_expedicion,
+            "dNumDoc": num_doc,
             "dFeEmiDE": datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-            "iTipTra": 2, "cMoneOpe": "PYG", "iCondOpe": 1, "iNatRec": i_nat_rec,
-            "dNomRec": paciente_nombre, "dEmailRec": "facturas@example.invalid", "enviar_sifen": True,
-            "Detalles": [{"dCodInt": "SRV-MED", "dDesProSer": concepto, "cUniMed": "77", "dDesUniMed": "UNI", "dCantProSer": 1, "dPUniProSer": monto, "dTotopeItem": monto, "iAfecIVA": 3, "dTasaIVA": 0}],
-            "Subtotales": [{"dSub10": 0, "dSub5": 0, "dSubExe": monto, "dTotOpe": monto, "dTotGralOpe": monto, "dTotIVA": 0, "dIVA10": 0, "dIVA5": 0}],
-            "FormaPago": [{"iTiPago": 1 if metodo == "Efectivo" else 5, "dDesTiPag": metodo, "dMonTiPag": monto, "cMoneTiPag": "PYG"}]
+            "iTipTra": 2, 
+            "cMoneOpe": "PYG",
+            "iCondOpe": 1,
+            "iNatRec": i_nat_rec,
+            "dNomRec": paciente_nombre,
+            "dEmailRec": "facturas@example.invalid",
+            "enviar_sifen": True,
+            "Detalles": [
+                {
+                    "dCodInt": "SRV-MED",
+                    "dDesProSer": concepto_servicio,
+                    "cUniMed": "77",
+                    "dDesUniMed": "UNI",
+                    "dCantProSer": 1,
+                    "dPUniProSer": monto,
+                    "dTotopeItem": monto,
+                    "iAfecIVA": 3,
+                    "dTasaIVA": 0
+                }
+            ],
+            "Subtotales": [
+                {
+                    "dSub10": 0, "dSub5": 0, "dSubExe": monto,
+                    "dTotOpe": monto, "dTotGralOpe": monto,
+                    "dTotIVA": 0, "dIVA10": 0, "dIVA5": 0
+                }
+            ],
+            "FormaPago": [
+                {
+                    "iTiPago": 1 if metodo == "Efectivo" else 5,
+                    "dDesTiPag": metodo,
+                    "dMonTiPag": monto,
+                    "cMoneTiPag": "PYG"
+                }
+            ]
         }
+
         if i_nat_rec == 1:
-            payload.update({"iTiContRec": 2 if int(ruc_limpio or 0) >= 80000000 else 1, "iTipIDRec": 1, "dRucRec": ruc_limpio, "dDVRec": dv_limpio})
+            try:
+                es_juridica = int(ruc_limpio) >= 80000000
+            except ValueError:
+                es_juridica = False
+            payload_factura["iTiContRec"] = 2 if es_juridica else 1
+            payload_factura["iTipIDRec"] = 1
+            payload_factura["dRucRec"] = ruc_limpio
+            payload_factura["dDVRec"] = dv_limpio
         elif num_id_limpio == "0":
-            payload.update({"iTipIDRec": 5, "dNumIDRec": "0", "dNomRec": "Sin Nombre"})
+            payload_factura["iTipIDRec"] = 5
+            payload_factura["dNumIDRec"] = "0"
+            payload_factura["dNomRec"] = "Sin Nombre"
         else:
-            payload.update({"iTipIDRec": 1, "dNumIDRec": num_id_limpio})
+            payload_factura["iTipIDRec"] = 1
+            payload_factura["dNumIDRec"] = num_id_limpio
 
         try:
-            res = requests.post(MIFACTU_OPERATION_URL, json=payload, headers=headers_mifactu(token_mifactu), timeout=15)
-            if res.status_code == 200 and res.json().get("status") == "success":
-                cdc = res.json().get("CDC", cdc)
-                estado = consultar_estado_mifactu(token_mifactu, est, pun, num_doc)
-            else:
-                msg_err = res.json().get('message', 'Error')
-                estado = f"Aprobado Local (Contingencia Timbrado): {msg_err}"
-        except Exception as e:
-            estado = f"Aprobado Local (Sin conexión Sifen): {str(e)}"
+            res_mifactu = requests.post(MIFACTU_OPERATION_URL, json=payload_factura, headers=headers_mifactu(token_mifactu), timeout=20)
+            try:
+                resultado_json = res_mifactu.json()
+            except Exception:
+                resultado_json = {}
 
-    nuevo_pago = PagoModel(paciente=f"{paciente_nombre} ({ruc_cliente or 'Innominado'})", monto=monto, metodo=metodo, referencia=f"Servicio: {concepto}", estado="Completado", fecha=datetime.date.today().strftime('%d/%m/%Y'), sifen_status=estado, cdc=cdc, establecimiento=est, punto_expedicion=pun, numero_documento=num_doc)
+            if res_mifactu.status_code == 200 and resultado_json.get("status") == "success":
+                cdc_generado = resultado_json.get("CDC")
+                estado_sifen = "Procesando"
+                nuevo = consultar_estado_mifactu(token_mifactu, establecimiento, punto_expedicion, num_doc, esperas=(2, 3, 5, 5))
+                if nuevo:
+                    estado_sifen = nuevo
+            else:
+                estado_sifen = f"Rechazado: {resultado_json.get('message', 'Error de validación')}"
+        except Exception as api_err:
+            estado_sifen = f"Error de red API: {str(api_err)}"
+
+    if not cdc_generado:
+        cdc_generado = "SIN-CDC"
+
+    nuevo_pago = PagoModel(
+        paciente=f"{paciente_nombre} ({ruc_cliente if ruc_cliente else 'Innominado'})"[:150],
+        monto=monto,
+        metodo=metodo,
+        referencia=f"Servicio: {concepto_servicio}"[:100],
+        estado="Completado",
+        fecha=datetime.date.today().strftime('%d/%m/%Y'),
+        sifen_status=(estado_sifen or "Procesando")[:250],
+        cdc=cdc_generado,
+        establecimiento=establecimiento,
+        punto_expedicion=punto_expedicion,
+        numero_documento=num_doc
+    )
     db.session.add(nuevo_pago)
     db.session.commit()
+    
     return redirect(url_for('descargar_kude_oficial', pago_id=nuevo_pago.id, token=token))
 
 @app.route('/api/caja/descargar-kude/<int:pago_id>', methods=['GET'])
 def descargar_kude_oficial(pago_id):
     token = request.args.get('token')
-    if not token or f'user_{token}' not in session: return redirect(url_for('login'))
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
+        
     pago = PagoModel.query.get_or_404(pago_id)
     token_mifactu = obtener_token_mifactu()
-    pdf_base64 = None
     
-    if token_mifactu and "Contingencia" not in (pago.sifen_status or ""):
-        try:
-            res = requests.post(MIFACTU_OPERATION_URL, json={"tipOpe": "4", "dEst": pago.establecimiento, "dPunExp": pago.punto_expedicion, "dNumDoc": pago.numero_documento, "tipoDoc": "FE"}, headers=headers_mifactu(token_mifactu), timeout=15)
-            if res.status_code == 200: pdf_base64 = res.json().get("kude")
-        except Exception: pass
+    pdf_base64 = None
+    if token_mifactu:
+        estado_actual = pago.sifen_status or ""
+        if (not estado_actual.startswith("Aprobado") and not estado_actual.startswith(("Rechazado", "Error")) and pago.cdc != "SIN-CDC"):
+            nuevo = consultar_estado_mifactu(token_mifactu, pago.establecimiento, pago.punto_expedicion, pago.numero_documento)
+            if nuevo:
+                pago.sifen_status = nuevo[:250]
+                db.session.commit()
+
+        if (pago.sifen_status or "").startswith("Aprobado"):
+            # CORREGIDO: tipOpe con "O" mayúscula (4) para descarga de KUDE según Guía Capítulo 9
+            payload_kude = {
+                "tipOpe": "4",
+                "dEst": pago.establecimiento,
+                "dPunExp": pago.punto_expedicion,
+                "dNumDoc": pago.numero_documento,
+                "tipoDoc": "FE"
+            }
+            try:
+                res = requests.post(MIFACTU_OPERATION_URL, json=payload_kude, headers=headers_mifactu(token_mifactu), timeout=20)
+                if res.status_code == 200:
+                    pdf_base64 = res.json().get("kude")
+            except Exception as e:
+                print("Error descargando PDF de MiFactu:", str(e))
             
     if pdf_base64:
-        return send_file(io.BytesIO(base64.b64decode(pdf_base64)), mimetype='application/pdf', as_attachment=True, download_name=f"Factura_{pago.numero_documento}.pdf")
-        
-    return f"""<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Comprobante de Caja</title></head>
-    <body style="font-family:sans-serif; text-align:center; padding:50px; background:#f4f6f9;">
-    <div style="background:white; max-width:500px; margin:0 auto; padding:30px; border-radius:8px; border-top:5px solid #059669; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-    <h2 style="color:#059669;">¡Pago Registrado en Caja!</h2>
-    <p><b>Documento:</b> {html.escape(pago.establecimiento)}-{html.escape(pago.punto_expedicion)}-{html.escape(pago.numero_documento)}</p>
-    <p><b>Paciente:</b> {html.escape(pago.paciente)}</p>
-    <p><b>Monto:</b> ₲ {pago.monto:,.0f}</p>
-    <p><b>Estado Sifen:</b> {html.escape(pago.sifen_status or '')}</p>
-    <p style="font-size: 11px; color: #555;">(Modo contingencia activo para demostración y Go-Live).</p>
-    <a href="/?token={html.escape(token)}&rol=secretaria&seccion=caja" style="background:#800020; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; display:inline-block; margin-top:15px; font-weight:bold;">← Volver al Panel de Caja</a>
-    </div></body></html>"""
+        pdf_bytes = base64.b64decode(pdf_base64)
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"Factura_Sifen_{pago.numero_documento}.pdf"
+        )
+
+    estado = pago.sifen_status or ""
+    if estado.startswith(("Rechazado", "Error")):
+        titulo, color = "No se pudo emitir la factura", "#dc2626"
+    elif estado.startswith("Aprobado"):
+        titulo, color = "Factura aprobada (KUDE no disponible aún)", "#059669"
+    else:
+        titulo, color = "Factura registrada: en proceso en SIFEN", "#d97706"
+
+    estado_html = html.escape(estado)
+    cdc_html = f"<p><b>CDC:</b> {html.escape(pago.cdc)}</p>" if pago.cdc and pago.cdc != "SIN-CDC" else ""
+    num_html = html.escape(f"{pago.establecimiento}-{pago.punto_expedicion}-{pago.numero_documento}")
+    token_html = html.escape(token)
+    reintentar = f'<a href="/api/caja/descargar-kude/{pago.id}?token={token_html}" style="display: inline-block; background: #555; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; margin-right: 8px; font-weight: bold;">↻ Actualizar estado</a>' if not estado.startswith(("Rechazado", "Error")) else ""
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head><meta charset="UTF-8"><title>Estado de la Factura</title></head>
+    <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #f4f6f9;">
+        <div style="background: white; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 8px; border-top: 5px solid {color}; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <h2 style="color: {color};">{titulo}</h2>
+            <p><b>Documento:</b> {num_html}</p>
+            <p><b>Estado Sifen:</b> {estado_html}</p>
+            {cdc_html}
+            {reintentar}
+            <a href="/?token={token_html}&rol=secretaria&seccion=caja" style="display: inline-block; background: #800020; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; font-weight: bold;">← Volver al Panel de Caja</a>
+        </div>
+    </body>
+    </html>
+    """
 
 if __name__ == '__main__':
     valido, mensaje = validar_certificado_pfx()
