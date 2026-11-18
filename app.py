@@ -78,7 +78,7 @@ db = SQLAlchemy(app)
 FINANZAS_API_URL = "https://finanzas1.onrender.com/api/v1/registrar-transaccion"
 
 # ==========================================
-# MODELOS DE BASE DE DATOS
+# MODELOS DE BASE DE DATOS (PERSISTENTES)
 # ==========================================
 class PacienteModel(db.Model):
     __tablename__ = 'pacientes'
@@ -126,7 +126,7 @@ class PagoModel(db.Model):
     cdc = db.Column(db.String(100), nullable=False)
     establecimiento = db.Column(db.String(3), default="001")
     punto_expedicion = db.Column(db.String(3), default="001")
-    numero_documento = db.Column(db.String(7), default="0000001")
+    numero_documento = db.Column(db.String(7), default="0000008")
 
 class PlantillaRecetaModel(db.Model):
     __tablename__ = 'plantillas_recetas'
@@ -240,7 +240,7 @@ with app.app_context():
         print("Tablas ya inicializadas:", e)
 
 # ==========================================
-# REQUERIMIENTO 02: NUEVOS LABORATORIOS DEL PDF (ACTUALIZADO)
+# LABORATORIOS AETERNA
 # ==========================================
 LABORATORIOS_AETERNA = {
     "Metabólico y Base": [
@@ -1927,7 +1927,7 @@ def headers_mifactu(token_m):
     }
 
 def siguiente_numero_documento(establecimiento, punto_expedicion):
-    ultimo = 0
+    ultimo = 7  # Sincronizado con MiFactu para que el siguiente documento sea el 0000008
     pagos = PagoModel.query.filter_by(establecimiento=establecimiento, punto_expedicion=punto_expedicion).all()
     for p in pagos:
         try:
