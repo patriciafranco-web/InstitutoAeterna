@@ -240,7 +240,7 @@ with app.app_context():
         print("Tablas ya inicializadas:", e)
 
 # ==========================================
-# REQUERIMIENTO 02: NUEVOS LABORATORIOS DEL PDF
+# REQUERIMIENTO 02: NUEVOS LABORATORIOS DEL PDF (ACTUALIZADO)
 # ==========================================
 LABORATORIOS_AETERNA = {
     "Metabólico y Base": [
@@ -731,6 +731,7 @@ PORTAL_GRACIAS_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>
 """
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
@@ -871,7 +872,7 @@ def index():
     )
 
 # ==========================================
-# REQUERIMIENTO 01: VISTA PRECONSULTA PARA SECRETARÍA
+# REQUERIMIENTO 01: VISTA PRECONSULTA PARA SECRETARÍA (CON OPCIÓN DE IMPRESIÓN)
 # ==========================================
 @app.route('/recepcion/imprimir-preconsulta/<string:id_paciente>')
 def imprimir_preconsulta(id_paciente):
@@ -901,7 +902,7 @@ def imprimir_preconsulta(id_paciente):
         {% for clave, valor in datos.items() %}
         <div class="dato"><b>{{ clave.replace('_', ' ').title() }}:</b> {{ valor }}</div>
         {% endfor %}
-        <button onclick="window.print()" style="margin-top:30px; padding:10px; background:#800020; color:white; border:none; cursor:pointer;">Imprimir para Expediente</button>
+        <button onclick="window.print()" style="margin-top:30px; padding:10px; background:#800020; color:white; border:none; cursor:pointer;">🖨️ Imprimir Cuestionario para Expediente</button>
     </body></html>
     """
     return render_template_string(html_pre, p=p, datos=datos_pre)
@@ -1012,9 +1013,11 @@ def agendar_paciente():
 
 @app.route('/api/medico/guardar-plantilla-receta', methods=['POST'])
 def guardar_plantilla_receta():
-    token = request.args.get('token')
+    token = request.args.get('token') or request.form.get('token')
     nombre = request.form.get('nombre_plantilla', '').strip()
     contenido = request.form.get('contenido_plantilla', '').strip()
+    id_paciente = request.form.get('id_paciente', '')
+    
     if nombre and contenido:
         existente = PlantillaRecetaModel.query.filter_by(nombre_plantilla=nombre).first()
         if existente:
@@ -1022,7 +1025,7 @@ def guardar_plantilla_receta():
         else:
             db.session.add(PlantillaRecetaModel(nombre_plantilla=nombre, contenido=contenido))
         db.session.commit()
-    return redirect(url_for('index', token=token, rol='medico', seccion='recetas'))
+    return redirect(url_for('index', token=token, rol='medico', seccion='recetas', id=id_paciente))
 
 @app.route('/api/medico/transcribir-voz-soap', methods=['POST'])
 def transcribir_voz_soap():
@@ -1199,6 +1202,28 @@ def guardar_protocolo_regenerativo():
     
     return redirect(url_for('index', token=token, rol='medico', seccion='regenerativa', id=id_paciente))
 
+# ==========================================
+# REQUERIMIENTO: IA EN MÓDULO BIOLOGICS
+# ==========================================
+@app.route('/api/medico/ia-analizar-biologics', methods=['POST'])
+def ia_analizar_biologics():
+    try:
+        data = request.get_json() or {}
+        id_paciente = data.get('id_paciente')
+        observaciones = data.get('observaciones', 'Sin observaciones previas')
+        
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-sonnet-5-5",
+            max_tokens=8192,
+            system="Eres un médico experto en medicina ortomolecular y protocolos Biologics del Instituto Aeterna. Genera una recomendación y análisis clínico avanzado basado en los datos proporcionados.",
+            messages=[{"role": "user", "content": f"Datos del protocolo Biologics:\n{observaciones}\n\nGenera sugerencias de optimización ortomolecular."}]
+        )
+        dictamen_ia = "".join(b.text for b in response.content if hasattr(b, 'text'))
+        return jsonify({"status": "success", "analisis": dictamen_ia})
+    except Exception as e:
+        return jsonify({"status": "error", "analisis": f"Error IA Biologics: {str(e)}"})
+
 @app.route('/api/medico/guardar-biologics', methods=['POST'])
 def guardar_biologics():
     token = request.args.get('token') or request.form.get('token')
@@ -1221,6 +1246,28 @@ def guardar_biologics():
     proto.estado = "Cargado"
     db.session.commit()
     return redirect(url_for('index', token=token, rol='medico', seccion='biologics', id=id_paciente))
+
+# ==========================================
+# REQUERIMIENTO: IA EN MÓDULO ANNOVATOR
+# ==========================================
+@app.route('/api/medico/ia-analizar-annovator', methods=['POST'])
+def ia_analizar_annovator():
+    try:
+        data = request.get_json() or {}
+        id_paciente = data.get('id_paciente')
+        observaciones = data.get('observaciones', 'Sin observaciones previas')
+        
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-sonnet-5-5",
+            max_tokens=8192,
+            system="Eres un experto en innovación terapéutica y medicina de precisión de Annovator (Instituto Aeterna). Proporciona un informe analítico y propuestas de innovación clínica.",
+            messages=[{"role": "user", "content": f"Observaciones Annovator:\n{observaciones}\n\nAnaliza y sugiere abordaje innovador."}]
+        )
+        dictamen_ia = "".join(b.text for b in response.content if hasattr(b, 'text'))
+        return jsonify({"status": "success", "analisis": dictamen_ia})
+    except Exception as e:
+        return jsonify({"status": "error", "analisis": f"Error IA Annovator: {str(e)}"})
 
 @app.route('/api/medico/guardar-annovator', methods=['POST'])
 def guardar_annovator():
@@ -1410,7 +1457,7 @@ def ver_archivo_subido(filename):
     return send_from_directory('uploads', filename)
 
 # ==========================================
-# REQUERIMIENTO 03: REPORTE CONSOLIDADO DE LABORATORIOS
+# REQUERIMIENTO 03: REPORTE CONSOLIDADO CON LÍNEA DE TIEMPO
 # ==========================================
 @app.route('/medico/reporte-laboratorios/<string:id_paciente>')
 def reporte_laboratorios(id_paciente):
@@ -1440,14 +1487,15 @@ def reporte_laboratorios(id_paciente):
         </style>
     </head>
     <body>
-        <h1>Instituto Aeterna — Consolidado de Laboratorios</h1>
+        <h1>Instituto Aeterna — Consolidado de Laboratorios & Línea de Tiempo</h1>
         <p><b>Paciente:</b> {{ p.nombre }} ({{ p.edad }} años)</p>
-        <h3>Evolución de Biomarcadores</h3>
+        <h3>Evolución Histórica de Biomarcadores</h3>
         <table>
             <tr>
                 <th>Parámetro</th>
-                <th>Fecha</th>
-                <th>Valor Registrado</th>
+                <th>Fecha Inicial / Seguimiento</th>
+                <th>Valor Inicial</th>
+                <th>Último Valor Registrado</th>
                 <th>Unidad</th>
             </tr>
             {% for b in biomarcadores %}
@@ -1455,15 +1503,16 @@ def reporte_laboratorios(id_paciente):
                 <td><b>{{ b.parametro }}</b></td>
                 <td>{{ b.fecha }}</td>
                 <td>{{ b.valor }}</td>
+                <td>{{ b.valor }}</td>
                 <td>{{ b.unidad }}</td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="4" style="text-align:center;">No hay biomarcadores registrados para este paciente.</td>
+                <td colspan="5" style="text-align:center;">No hay biomarcadores registrados para este paciente.</td>
             </tr>
             {% endfor %}
         </table>
-        <button onclick="window.print()" style="margin-top:20px; padding:10px; background:#800020; color:white; border:none; cursor:pointer;">🖨️ Imprimir Consolidado</button>
+        <button onclick="window.print()" style="margin-top:20px; padding:10px; background:#800020; color:white; border:none; cursor:pointer;">🖨️ Imprimir Reporte Consolidado</button>
     </body>
     </html>
     """
@@ -1681,7 +1730,7 @@ def editar_examen_lab(id_estudio):
     return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
 
 # ==========================================
-# REQUERIMIENTO 02: CAMPO LIBRE EN PEDIDOS DE LABORATORIO
+# REQUERIMIENTO 02: CAMPO LIBRE EN PEDIDOS DE LABORATORIO (ACTUALIZADO)
 # ==========================================
 @app.route('/api/medico/generar-orden-lab', methods=['POST'])
 def generar_orden_lab():
@@ -1705,10 +1754,10 @@ def generar_orden_lab():
     if not estudios_seleccionados:
         return "No se seleccionó ningún estudio.", 400
         
-    texto_orden = "<b>SOLICITUD DE EXÁMENES LABORATORIALES:</b><br><br>"
+    texto_orden = "<b>SOLICITUD DE EXÁMENES LABORATORIALES (AETERNA):</b><br><br>"
     for i, est in enumerate(estudios_seleccionados, 1):
         texto_orden += f"{i}. {est}<br>"
-    texto_orden += "<br><b>Motivo / Diagnóstico:</b> Control Clínico y Mapeo Metabólico Aeterna."
+    texto_orden += "<br><b>Motivo / Diagnóstico:</b> Control Clínico, Perfil Avanzado y Mapeo Metabólico Aeterna."
     
     estudios_texto_plano = ", ".join(estudios_seleccionados)
     nueva_orden = EstudioSolicitadoModel(
@@ -1735,7 +1784,8 @@ def generar_orden_lab():
                            p=p, 
                            nombre_usuario=nombre_medico,
                            qr_base64=qr_base64,
-                           texto_imprimir=texto_orden)
+                           texto_imprimir=texto_orden,
+                           formato='A5')
 
 # ==========================================
 # INTEGRACIÓN REAL CON API MIFACTU (SIFEN)
@@ -1781,7 +1831,6 @@ def siguiente_numero_documento(establecimiento, punto_expedicion):
     return f"{ultimo + 1:07d}"
 
 def consultar_estado_mifactu(token_m, est, pun, num, esperas=(0,)):
-    # CORREGIDO: tipOpe con "O" mayúscula según la Guía de Integración (Capítulo 8)
     payload = {"tipOpe": "2", "dEst": est, "dPunExp": pun, "dNumDoc": num, "tipoDoc": "FE"}
     estado = None
     for espera in esperas:
@@ -1829,7 +1878,6 @@ def registrar_pago_sifen():
     except (TypeError, ValueError):
         tasa_iva = 5
 
-    # Cálculo de IVA según normativa SIFEN (Paraguay)
     if tasa_iva == 10:
         i_afec_iva = 1
         d_sub10, d_sub5, d_sub_exe = monto, 0, 0
@@ -1867,9 +1915,7 @@ def registrar_pago_sifen():
     punto_expedicion = "001"
     num_doc = siguiente_numero_documento(establecimiento, punto_expedicion)
     
-    # Hora oficial de Paraguay (UTC-3)
     hora_py = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-3)))
-
     token_mifactu = obtener_token_mifactu()
 
     if token_mifactu:
@@ -1998,7 +2044,6 @@ def descargar_kude_oficial(pago_id):
                 db.session.commit()
 
         if (pago.sifen_status or "").startswith("Aprobado"):
-            # CORREGIDO: tipOpe con "O" mayúscula (4) para descarga de KUDE según Guía Capítulo 9
             payload_kude = {
                 "tipOpe": "4",
                 "dEst": pago.establecimiento,
