@@ -211,39 +211,64 @@
                 </div>
 
                 <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-                    <h4 style="color: var(--accent); margin-top: 0; font-size: 13px; text-transform: uppercase;">Registrar Servicio, Monto y Previsualizar Sifen</h4>
-                    <form action="/api/caja/registrar-pago?token={{ token }}" method="POST" style="display: grid; grid-template-columns: 2fr 1.5fr 2fr 1fr 1fr 1fr; gap: 10px; align-items: end;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 10.5px;">Paciente / Cliente:</label>
-                            <input type="text" name="paciente" class="form-control" placeholder="Nombre y Apellido" required style="font-size: 12px; padding: 8px;">
+                    <h4 style="color: var(--accent); margin-top: 0; font-size: 13px; text-transform: uppercase;">Registrar Servicio, Datos del Paciente y Emitir Factura Sifen</h4>
+                    <form action="/api/caja/registrar-pago?token={{ token }}" method="POST">
+                        <div style="display: grid; grid-template-columns: 2fr 1.2fr 2fr 1fr; gap: 10px; margin-bottom: 12px; align-items: end;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 10.5px;">Paciente / Cliente:</label>
+                                <input type="text" name="paciente" class="form-control" placeholder="Nombre y Apellido" required style="font-size: 12px; padding: 8px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 10.5px;">RUC / Cédula:</label>
+                                <input type="text" name="ruc_cliente" class="form-control" placeholder="Ej. 80172292-6 o CI" style="font-size: 12px; padding: 8px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 10.5px;">Concepto / Servicio:</label>
+                                <input type="text" name="concepto" class="form-control" placeholder="Ej. Sueroterapia NAD+ / Consulta" required style="font-size: 12px; padding: 8px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 10.5px;">Monto (Gs.):</label>
+                                <input type="number" name="monto" class="form-control" placeholder="350000" required style="font-size: 12px; padding: 8px;">
+                            </div>
                         </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 10.5px;">RUC / Cédula:</label>
-                            <input type="text" name="ruc_cliente" class="form-control" placeholder="Ej. 80172292-6" style="font-size: 12px; padding: 8px;">
+
+                        <div style="display: grid; grid-template-columns: 1.3fr 1fr 1.8fr 1.2fr 1.6fr auto; gap: 10px; align-items: end;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 10.5px;">Tipo de IVA:</label>
+                                <select name="iva" class="form-control" style="font-size: 12px; padding: 8px;">
+                                    <option value="5" selected>IVA 5% (Salud)</option>
+                                    <option value="10">IVA 10% (General)</option>
+                                    <option value="0">Exenta (0%)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 10.5px;">Pago:</label>
+                                <select name="metodo" class="form-control" style="font-size: 12px; padding: 8px;">
+                                    <option value="Efectivo">Efectivo</option>
+                                    <option value="Tarjeta POS">POS</option>
+                                    <option value="Transferencia">Transf.</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 10.5px;">Dirección (Opcional):</label>
+                                <input type="text" name="direccion_cliente" class="form-control" placeholder="Ej. Av. San José" style="font-size: 12px; padding: 8px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 10.5px;">Teléfono (Opcional):</label>
+                                <input type="text" name="telefono_cliente" class="form-control" placeholder="Ej. 0973111128" style="font-size: 12px; padding: 8px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 10.5px;">Correo (Opcional):</label>
+                                <input type="email" name="email_cliente" class="form-control" placeholder="paciente@correo.com" style="font-size: 12px; padding: 8px;">
+                            </div>
+                            <button type="submit" class="btn" style="background: var(--success); font-size: 11px; padding: 9px 14px; height: 37px;">🧾 Emitir Sifen</button>
                         </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 10.5px;">Concepto / Servicio:</label>
-                            <input type="text" name="concepto" class="form-control" placeholder="Ej. Sueroterapia NAD+ / Consulta" required style="font-size: 12px; padding: 8px;">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 10.5px;">Monto (Gs.):</label>
-                            <input type="number" name="monto" class="form-control" placeholder="350000" required style="font-size: 12px; padding: 8px;">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 10.5px;">Pago:</label>
-                            <select name="metodo" class="form-control" style="font-size: 12px; padding: 8px;">
-                                <option value="Efectivo">Efectivo</option>
-                                <option value="Tarjeta POS">POS</option>
-                                <option value="Transferencia">Transf.</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn" style="background: var(--success); font-size: 11px; padding: 9px 12px; height: 37px;">👁️ Previsualizar Sifen</button>
                     </form>
                 </div>
 
                 <h4 style="color: var(--accent); font-size: 12.5px; text-transform: uppercase; margin-bottom: 10px;">Comprobantes Electrónicos Emitidos Hoy</h4>
                 <table>
-                    <tr><th>Fecha</th><th>Paciente / RUC</th><th>Monto</th><th>Método</th><th>Estado Sifen</th><th>CDC (Código de Control)</th></tr>
+                    <tr><th>Fecha</th><th>Paciente / RUC</th><th>Monto</th><th>Método</th><th>Estado Sifen</th><th>CDC (Código de Control)</th><th>KuDE</th></tr>
                     {% if pagos %}
                         {% for pago in pagos %}
                         <tr>
@@ -253,10 +278,11 @@
                             <td>{{ pago.metodo }}</td>
                             <td><span style="color: var(--success); font-weight: bold;">{{ pago.sifen_status }}</span></td>
                             <td><code style="font-size: 10px; background: var(--bg-main); padding: 4px; border-radius: 4px; color: var(--accent);">{{ pago.cdc }}</code></td>
+                            <td><a href="/api/caja/descargar-kude/{{ pago.id }}?token={{ token }}" target="_blank" class="btn" style="padding: 5px 10px; font-size: 10.5px;">📄 PDF</a></td>
                         </tr>
                         {% endfor %}
                     {% else %}
-                        <tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 20px;">No hay facturas electrónicas emitidas todavía. Realiza una prueba arriba.</td></tr>
+                        <tr><td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 20px;">No hay facturas electrónicas emitidas todavía. Realiza una prueba arriba.</td></tr>
                     {% endif %}
                 </table>
             </div>
@@ -748,7 +774,7 @@
                 {% endif %}
             </div>
 
-        <!-- 4. EXÁMENES NO LABORATORIALES -->
+<!-- 4. EXÁMENES NO LABORATORIALES -->
         {% elif seccion == 'examenes_no_lab' and p %}
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); width: auto;">← VOLVER A MI AGENDA</a>
