@@ -10,23 +10,18 @@ import json
 import datetime
 import time
 import anthropic
-import re # Agregado para extraccion segura de JSON
+import re 
 import html
 import secrets
-
-# Librerías para la Receta Electrónica (QR y UUID)
 import qrcode
 import io
 import base64
 import uuid
-
-# Librerías para Facturación Electrónica Sifen (.pfx)
 from cryptography.hazmat.primitives.serialization import pkcs12
 
 SIFEN_CERT_PASS = os.getenv('SIFEN_CERT_PASS', '')
 
 def cargar_certificado():
-    """Carga de forma segura el certificado .pfx codificado en Base64 desde Render o local"""
     rutas_b64 = [
         '/etc/secrets/certificado.b64',
         'certificado.b64',
@@ -40,7 +35,6 @@ def cargar_certificado():
             break
             
     if not archivo_encontrado:
-        # Respaldo si estuviera como .pfx directo binario
         if os.path.exists('/etc/secrets/certificado.pfx'):
             with open('/etc/secrets/certificado.pfx', 'rb') as f:
                 datos_bin = f.read()
@@ -51,7 +45,7 @@ def cargar_certificado():
                 datos_bin = f.read()
             password = SIFEN_CERT_PASS.strip().encode() if SIFEN_CERT_PASS else b''
             return pkcs12.load_key_and_certificates(datos_bin, password)
-        raise FileNotFoundError("No se encontró el archivo certificado.b64 ni certificado.pfx en el servidor.")
+        raise FileNotFoundError("No se encontró el certificado Sifen.")
 
     with open(archivo_encontrado, "r") as f:
         contenido = f.read().strip()
@@ -61,15 +55,13 @@ def cargar_certificado():
     return pkcs12.load_key_and_certificates(datos, password)
 
 def validar_certificado_pfx():
-    """Valida de forma segura el certificado cargado"""
     try:
         private_key, certificate, additional_certificates = cargar_certificado()
-        subject = certificate.subject.rfc4514_string() if certificate else "Certificado Válido"
-        return True, f"Certificado digital Sifen cargado y verificado correctamente."
+        return True, f"Certificado digital Sifen cargado correctamente."
     except Exception as e:
-        return False, f"Error al abrir el certificado (contraseña incorrecta o archivo corrupto): {str(e)}"
+        return False, f"Error certificado: {str(e)}"
 
-# 1. CONEXIÓN DEFINITIVA A ANTHROPIC
+# 1. CONEXIÓN A ANTHROPIC
 client = anthropic.Anthropic()
 
 app = Flask(__name__)
@@ -83,13 +75,11 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-
 FINANZAS_API_URL = "https://finanzas1.onrender.com/api/v1/registrar-transaccion"
 
 # ==========================================
-# MODELOS DE BASE DE DATOS (PERSISTENCIA TOTAL)
+# MODELOS DE BASE DE DATOS
 # ==========================================
-
 class PacienteModel(db.Model):
     __tablename__ = 'pacientes'
     id = db.Column(db.String(50), primary_key=True)
@@ -119,7 +109,7 @@ class FotoClinicaModel(db.Model):
     __tablename__ = 'fotos_clinicas'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     id_paciente = db.Column(db.String(50), nullable=False)
-    tipo = db.Column(db.String(20), nullable=False) # 'antes' o 'despues'
+    tipo = db.Column(db.String(20), nullable=False)
     filename = db.Column(db.String(255), nullable=False)
     fecha = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
 
@@ -249,9 +239,13 @@ with app.app_context():
     except Exception as e:
         print("Tablas ya inicializadas:", e)
 
+# ==========================================
+# REQUERIMIENTO 02: NUEVOS LABORATORIOS DEL PDF
+# ==========================================
 LABORATORIOS_AETERNA = {
     "Metabólico y Base": [
         "Glucemia en ayunas", "Hemoglobina glicosilada (HbA1c)", "Insulina en ayunas (para calcular HOMA-IR)",
+        "Índice Triglicéridos / Glucosa (TyG)", "Índice HOMA-IR",
         "Colesterol total, HDL, LDL y no-HDL", "Triglicéridos", "TGO/AST, TGP/ALT, GGT y fosfatasa alcalina",
         "Bilirrubinas y albúmina", "Urea, creatinina con tasa de filtración estimada y ácido úrico",
         "Sodio, potasio, calcio, magnesio y fósforo", "Uroanálisis y relación albúmina/creatinina en orina", "Tiempo de coagulación"
@@ -261,11 +255,12 @@ LABORATORIOS_AETERNA = {
         "Antígeno fecal para Helicobacter pylori", "Test de aire espirado para hidrógeno y metano", "Calprotectina fecal"
     ],
     "Hormonal Masculino y Femenino": [
-        "Testosterona total y libre", "DHEA-S", "Cortisol (am/pm)", "LH y FSH", "Estradiol", "Progesterona", "Prolactina", "TSH y T4 libre"
+        "Testosterona total y libre", "DHEA-S", "Cortisol sanguíneo", "LH y FSH", "Estradiol", "Progesterona", "Prolactina", "TSH y T4 libre"
     ],
-    "Vitaminas, Minerales e Inflamación": [
-        "Vitamina D (25-OH)", "Vitamina B12", "Ácido fólico (folato)", "Ferritina y Hierro sérico",
-        "Magnesio eritrocitario y Zinc", "Hemograma completo & PCR ultrasensible", "Riesgo Cardiometabólico (Lp(a), ApoB, Fibrinógeno, Homocisteína, Cistatina C)"
+    "Vitaminas, Minerales, Electrolitos e Inflamación": [
+        "Vitamina D (25-OH)", "Vitamina B12", "Ácido fólico (folato)", "Ferritina y Hierro sérico", "Saturación de transferrina",
+        "Magnesio eritrocitario y Zinc", "Dosaje de electrolitos y oligoelementos: selenio, zinc, cloro, manganeso y boro",
+        "Hemograma completo & PCR ultrasensible", "NT-proBNP", "Riesgo Cardiometabólico (Lp(a), ApoB, Fibrinógeno, Homocisteína, Cistatina C)"
     ],
     "Avanzados (Complejidad Alta)": [
         "Curva de tolerancia a la glucosa con insulina (0, 60, 120 min)", "Nutrientes y Antioxidantes (Omega-3)", "Intestino y Microbiota (Secuenciación de microbiota)"
@@ -743,6 +738,7 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip().lower()
         password = request.form.get('password', '')
+        
         if username in USUARIOS_DB:
             user_info = USUARIOS_DB[username]
             if password == user_info["pass"] or (user_info.get("es_socio") and password == user_info.get("pass_admin")):
@@ -766,6 +762,7 @@ def login():
                 error = "Contraseña incorrecta."
         else:
             error = "El usuario ingresado no existe en el sistema."
+            
     return render_template_string(LOGIN_TEMPLATE, error=error)
 
 @app.route('/logout')
@@ -873,6 +870,42 @@ def index():
         mensaje_pfx=mensaje_pfx,
         json=json
     )
+
+# ==========================================
+# REQUERIMIENTO 01: VISTA PRECONSULTA PARA SECRETARÍA
+# ==========================================
+@app.route('/recepcion/imprimir-preconsulta/<string:id_paciente>')
+def imprimir_preconsulta(id_paciente):
+    token = request.args.get('token')
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
+        
+    p = PacienteModel.query.filter_by(id=id_paciente).first()
+    if not p:
+        return "Paciente no encontrado", 404
+        
+    datos_pre = {}
+    if p.pre_consulta_json:
+        try:
+            datos_pre = json.loads(p.pre_consulta_json)
+        except Exception:
+            pass
+            
+    html_pre = """
+    <!DOCTYPE html>
+    <html lang="es"><head><meta charset="UTF-8"><title>Preconsulta - {{ p.nombre }}</title>
+    <style>body{font-family: Arial; padding:40px; line-height:1.6; color:#121110;} h1{color:#800020;} h3{border-bottom:2px solid #800020; padding-bottom:5px; color:#800020;} .dato{margin-bottom:10px; font-size:14px;}</style></head>
+    <body>
+        <h1>Cuestionario de Pre-Consulta 360°</h1>
+        <p><b>Paciente:</b> {{ p.nombre }} ({{ p.edad }} años)</p>
+        <h3>Resultados Completados:</h3>
+        {% for clave, valor in datos.items() %}
+        <div class="dato"><b>{{ clave.replace('_', ' ').title() }}:</b> {{ valor }}</div>
+        {% endfor %}
+        <button onclick="window.print()" style="margin-top:30px; padding:10px; background:#800020; color:white; border:none; cursor:pointer;">Imprimir para Expediente</button>
+    </body></html>
+    """
+    return render_template_string(html_pre, p=p, datos=datos_pre)
 
 @app.route('/portal/pre-consulta/<token_portal>', methods=['GET'])
 def portal_preconsulta_por_token(token_portal):
@@ -1378,11 +1411,73 @@ def ver_archivo_subido(filename):
     return send_from_directory('uploads', filename)
 
 # ==========================================
-# RUTAS DE RECETA ELECTRÓNICA Y QR
+# REQUERIMIENTO 03: REPORTE CONSOLIDADO DE LABORATORIOS
+# ==========================================
+@app.route('/medico/reporte-laboratorios/<string:id_paciente>')
+def reporte_laboratorios(id_paciente):
+    token = request.args.get('token')
+    if not token or f'user_{token}' not in session:
+        return redirect(url_for('login'))
+        
+    p = PacienteModel.query.filter_by(id=id_paciente).first()
+    if not p:
+        return "Paciente no encontrado", 404
+        
+    biomarcadores = BiomarcadorModel.query.filter_by(id_paciente=id_paciente).order_by(BiomarcadorModel.fecha.asc()).all()
+    
+    html_reporte = """
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <title>Reporte Consolidado de Laboratorios</title>
+        <style>
+            body { font-family: Arial; padding:40px; color:#121110; } 
+            h1, h3 { color:#800020; } 
+            table { width:100%; border-collapse:collapse; margin-top:10px; } 
+            th, td { border:1px solid #ddd; padding:8px; font-size:12px; } 
+            th { background:#f4f6f9; } 
+            .badge { background:#059669; color:white; padding:3px 8px; border-radius:12px; font-size:10px; }
+        </style>
+    </head>
+    <body>
+        <h1>Instituto Aeterna — Consolidado de Laboratorios</h1>
+        <p><b>Paciente:</b> {{ p.nombre }} ({{ p.edad }} años)</p>
+        <h3>Evolución de Biomarcadores</h3>
+        <table>
+            <tr>
+                <th>Parámetro</th>
+                <th>Fecha</th>
+                <th>Valor Registrado</th>
+                <th>Unidad</th>
+            </tr>
+            {% for b in biomarcadores %}
+            <tr>
+                <td><b>{{ b.parametro }}</b></td>
+                <td>{{ b.fecha }}</td>
+                <td>{{ b.valor }}</td>
+                <td>{{ b.unidad }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" style="text-align:center;">No hay biomarcadores registrados para este paciente.</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <button onclick="window.print()" style="margin-top:20px; padding:10px; background:#800020; color:white; border:none; cursor:pointer;">🖨️ Imprimir Consolidado</button>
+    </body>
+    </html>
+    """
+    return render_template_string(html_reporte, p=p, biomarcadores=biomarcadores)
+
+# ==========================================
+# REQUERIMIENTO 04: RECETAS ELECTRÓNICAS (A5 Y A4)
 # ==========================================
 @app.route('/medico/imprimir-receta/<id_paciente>')
 def imprimir_receta(id_paciente):
     token = request.args.get('token')
+    formato = request.args.get('formato', 'A5') 
+    
     if not token or f'user_{token}' not in session:
         return redirect(url_for('login'))
     
@@ -1415,12 +1510,14 @@ def imprimir_receta(id_paciente):
     db.session.commit()
     
     texto_receta_html = p.receta_texto.replace('\n', '<br>')
+    texto_imprimir = f"<b>INDICACIONES Y PRESCRIPCIÓN MÉDICA ({formato}):</b><br><br>{texto_receta_html}"
     
     return render_template('receta_membretada.html', 
                            p=p, 
                            nombre_usuario=nombre_medico,
                            qr_base64=qr_base64,
-                           texto_imprimir=f"<b>INDICACIONES Y PRESCRIPCIÓN MÉDICA:</b><br><br>{texto_receta_html}")
+                           texto_imprimir=texto_imprimir,
+                           formato=formato)
 
 @app.route('/validar/<id_receta>', methods=['GET', 'POST'])
 def validar_receta(id_receta):
@@ -1584,6 +1681,9 @@ def editar_examen_lab(id_estudio):
 
     return redirect(url_for('index', token=token, rol='medico', seccion='examenes_lab', id=id_paciente))
 
+# ==========================================
+# REQUERIMIENTO 02: CAMPO LIBRE EN PEDIDOS DE LABORATORIO
+# ==========================================
 @app.route('/api/medico/generar-orden-lab', methods=['POST'])
 def generar_orden_lab():
     token = request.args.get('token')
@@ -1592,6 +1692,7 @@ def generar_orden_lab():
     
     id_paciente = request.form.get('id_paciente')
     estudios_seleccionados = request.form.getlist('estudios')
+    estudio_libre = request.form.get('estudio_libre', '').strip()
     
     p = PacienteModel.query.filter_by(id=id_paciente).first()
     if not p:
@@ -1599,6 +1700,9 @@ def generar_orden_lab():
         
     nombre_medico = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
     
+    if estudio_libre:
+        estudios_seleccionados.append(f"{estudio_libre}")
+        
     if not estudios_seleccionados:
         return "No se seleccionó ningún estudio.", 400
         
