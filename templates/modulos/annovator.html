@@ -1,3 +1,5 @@
+{% set ann_datos = json.loads(proto_annovator.datos_json) if (proto_annovator and proto_annovator.datos_json) else {} %}
+
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); width: auto; text-decoration: none; font-size: 11.5px;">← VOLVER A MI AGENDA</a>
     <div style="display: flex; align-items: center; gap: 15px;">
@@ -23,6 +25,11 @@
             <p style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px 0;">Adjuntar Estudio PDF Annovator</p>
             <input type="file" name="archivo_pdf_annovator" accept=".pdf" class="form-control" style="font-size: 12px; color: var(--text-secondary); max-width: 400px; margin: 0 auto; background: white;">
             <span style="font-size: 11px; color: var(--text-secondary); display: block; margin-top: 8px;">Seleccione el archivo PDF del protocolo avanzado para cargar al expediente.</span>
+            {% if ann_datos.get('archivo_pdf') %}
+                <span style="font-size: 11px; color: var(--success); font-weight: bold; display: block; margin-top: 6px;">
+                    ✅ Archivo actual en expediente: {{ ann_datos.get('archivo_pdf') }}
+                </span>
+            {% endif %}
         </div>
 
         <!-- ZONA CENTRAL: EL ESPEJO DE DATOS (SPLIT VIEW) -->
@@ -43,11 +50,11 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
                     <div style="background: rgba(128, 0, 32, 0.05); border: 1px solid rgba(128, 0, 32, 0.2); padding: 12px; border-radius: 6px;">
                         <label style="font-size: 11px; font-weight: bold; color: var(--accent); display: block; margin-bottom: 4px;">Índice de Innovación:</label>
-                        <input type="text" id="inputAnnovatorScore" value="" placeholder="Ej. 88 / 100" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
+                        <input type="text" name="indice_innovacion" id="inputAnnovatorScore" value="{{ ann_datos.get('indice_innovacion', '') }}" placeholder="Ej. 88 / 100" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
                     </div>
                     <div style="background: rgba(5, 150, 105, 0.08); border: 1px solid rgba(5, 150, 105, 0.3); padding: 12px; border-radius: 6px;">
                         <label style="font-size: 11px; font-weight: bold; color: var(--success); display: block; margin-bottom: 4px;">Respuesta Celular:</label>
-                        <input type="text" id="inputRespuestaAnnovator" value="" placeholder="Ej. +14% vs basal" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
+                        <input type="text" name="respuesta_celular" id="inputRespuestaAnnovator" value="{{ ann_datos.get('respuesta_celular', '') }}" placeholder="Ej. +14% vs basal" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
                     </div>
                 </div>
 
@@ -58,9 +65,13 @@
 
             <!-- Columna Derecha: Visor PDF Embebido -->
             <div style="background: #ffffff; border: 1px solid var(--border); padding: 15px; border-radius: 8px; height: 280px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #666;">
-                <span style="font-size: 32px; margin-bottom: 8px;">📑</span>
-                <p style="font-size: 12px; font-weight: bold; margin: 0;">Visor PDF Embebido (Annovator)</p>
-                <span style="font-size: 11px; color: #888;">Adjunte un archivo PDF para visualizarlo en paralelo.</span>
+                {% if ann_datos.get('archivo_pdf') %}
+                    <iframe src="/uploads/{{ ann_datos.get('archivo_pdf') }}?token={{ token }}" style="width: 100%; height: 100%; border: none; border-radius: 4px;"></iframe>
+                {% else %}
+                    <span style="font-size: 32px; margin-bottom: 8px;">📑</span>
+                    <p style="font-size: 12px; font-weight: bold; margin: 0;">Visor PDF Embebido (Annovator)</p>
+                    <span style="font-size: 11px; color: #888;">Adjunte un archivo PDF para visualizarlo en paralelo.</span>
+                {% endif %}
             </div>
         </div>
 
@@ -83,6 +94,7 @@
                     <select id="selectProfesionalAnnovator" class="form-control" style="font-size: 11.5px;">
                         <option value="Manuel Duarte (Preparador Físico)">Manuel Duarte (Preparador Físico)</option>
                         <option value="Lic. Ximena Ruiz (Nutrición Clínica)">Lic. Ximena Ruiz (Nutrición Clínica)</option>
+                        <option value="Lic. Belén Romero (Nutrición Clínica)">Lic. Belén Romero (Nutrición Clínica)</option>
                         <option value="Dr. Alfredo Estigarribia (Odontología del Sueño)">Dr. Alfredo Estigarribia (Odontología del Sueño)</option>
                     </select>
                     <input type="text" id="inputNotaEquipoAnnovator" placeholder="Indicación específica basada en el estudio..." class="form-control" style="font-size: 11.5px;">
