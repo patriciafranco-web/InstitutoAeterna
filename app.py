@@ -243,8 +243,12 @@ class EstudioSolicitadoModel(db.Model):
 with app.app_context():
     try:
         db.create_all()
+        db.session.execute(db.text("ALTER TABLE protocolos_biologics ADD COLUMN IF NOT EXISTS datos_json TEXT"))
+        db.session.execute(db.text("ALTER TABLE protocolos_annovator ADD COLUMN IF NOT EXISTS datos_json TEXT"))
+        db.session.commit()
     except Exception as e:
-        print("Tablas ya inicializadas:", e)
+        db.session.rollback()
+        print("Tablas ya inicializadas / migración:", e)
 
 # ==========================================
 # LABORATORIOS AETERNA
