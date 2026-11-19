@@ -21,6 +21,11 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 
 SIFEN_CERT_PASS = os.getenv('SIFEN_CERT_PASS', '')
 
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', '/opt/render/project/src/uploads')
+FOTOS_CLINICAS_DIR = os.path.join(UPLOAD_DIR, 'fotos_clinicas')
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(FOTOS_CLINICAS_DIR, exist_ok=True)
+
 def cargar_certificado():
     rutas_b64 = [
         '/etc/secrets/certificado.b64',
@@ -1186,8 +1191,6 @@ def transcribir_voz_soap():
         if not texto_dictado:
             return jsonify({"status": "error", "mensaje": "No se recibió texto dictado."}), 400
 
-        client = anthropic.Anthropic()
-        
         response = client.messages.create(
             model="claude-sonnet-5-5",
             max_tokens=8192,
@@ -1206,6 +1209,36 @@ def transcribir_voz_soap():
         dictamen_soap = "".join(b.text for b in response.content if hasattr(b, 'text'))
         return jsonify({"status": "success", "soap": dictamen_soap})
 
+    except Exception as e:
+        return jsonify({"status": "error", "mensaje": f"Error técnico: {str(e)}"}), 500
+
+@app.route('/api/medico/asistir-protocolo-ia', methods=['POST'])
+def asistir_protocolo_ia():
+    try:
+        data = request.get_json(silent=True) or {}
+        texto = (data.get('texto') or '').strip()
+        modulo = (data.get('modulo') or 'Protocolo Clínico').strip()
+        diagnostico = (data.get('diagnostico') or '').strip()
+
+        if not texto:
+            return jsonify({"status": "error", "mensaje": "Dicta o escribe algún texto primero."}), 400
+
+        resp = client.messages.create(
+            model="claude-sonnet-5-5",
+            max_tokens=2048,
+            system=(
+                f"Eres un asistente de documentación clínica del Instituto Aeterna para el módulo {modulo}. "
+                "Organiza y redacta de forma clara, profesional y concisa en español las observaciones clínicas "
+                "a partir del dictado o notas del profesional. Usa solo la información proporcionada; "
+                "no inventes diagnósticos, dosis ni indicaciones."
+            ),
+            messages=[{
+                "role": "user",
+                "content": f"Diagnóstico/Protocolo: {diagnostico or 'No especificado'}\nNotas/Dictado:\n{texto}"
+            }]
+        )
+        resultado = "".join(b.text for b in resp.content if hasattr(b, 'text')).strip()
+        return jsonify({"status": "success", "resultado": resultado})
     except Exception as e:
         return jsonify({"status": "error", "mensaje": f"Error técnico: {str(e)}"}), 500
 
@@ -1244,9 +1277,9 @@ def subir_foto_evolucion():
         archivo = request.files.get('foto')
         
         if archivo and id_paciente:
-            os.makedirs('uploads/fotos_clinicas', exist_ok=True)
+            os.makedirs(FOTOS_CLINICAS_DIR, exist_ok=True)
             filename = f"paciente_{id_paciente}_{tipo}_{int(time.time())}.jpg"
-            filepath = os.path.join('uploads/fotos_clinicas', filename)
+            filepath = os.path.join(FOTOS_CLINICAS_DIR, filename)
             archivo.save(filepath)
             
             nueva_foto = FotoClinicaModel(
@@ -1269,15 +1302,13 @@ def ver_foto_clinica(filename):
     token = request.args.get('token')
     if not token or f'user_{token}' not in session:
         return redirect(url_for('login'))
-    return send_from_directory('uploads/fotos_clinicas', filename)
+    return send_from_directory(FOTOS_CLINICAS_DIR, filename)
 
 @app.route('/api/medico/ia-concluir-estudio', methods=['POST'])
 def ia_concluir_estudio():
     try:
         data = request.get_json() or {}
         valores = data.get('valores', 'Sin valores')
-        
-        client = anthropic.Anthropic()
         
         response = client.messages.create(
             model="claude-sonnet-5-5",
@@ -1362,8 +1393,8 @@ def guardar_biologics():
     archivo = request.files.get('archivo_pdf_biologics')
     if archivo and archivo.filename:
         filename = f"biologics_{id_paciente}_{archivo.filename}"
-        os.makedirs('uploads', exist_ok=True)
-        archivo.save(os.path.join('uploads', filename))
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        archivo.save(os.path.join(UPLOAD_DIR, filename))
     
     proto = ProtocoloBiologicsModel.query.filter_by(id_paciente=id_paciente).first()
     if not proto:
@@ -1385,8 +1416,8 @@ def guardar_annovator():
     archivo = request.files.get('archivo_pdf_annovator')
     if archivo and archivo.filename:
         filename = f"annovator_{id_paciente}_{archivo.filename}"
-        os.makedirs('uploads', exist_ok=True)
-        archivo.save(os.path.join('uploads', filename))
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        archivo.save(os.path.join(UPLOAD_DIR, filename))
     
     proto = ProtocoloAnnovatorModel.query.filter_by(id_paciente=id_paciente).first()
     if not proto:
@@ -1514,8 +1545,8 @@ def subir_estudio_no_lab():
 
     if archivo and id_paciente:
         filename = archivo.filename
-        os.makedirs('uploads', exist_ok=True)
-        archivo.save(os.path.join('uploads', filename))
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        archivo.save(os.path.join(UPLOAD_DIR, filename))
 
         nuevo_estudio = EstudioNoLabModel(
             id_paciente=id_paciente,
@@ -1560,7 +1591,7 @@ def ver_archivo_subido(filename):
     token = request.args.get('token')
     if not token or f'user_{token}' not in session:
         return redirect(url_for('login'))
-    return send_from_directory('uploads', filename)
+    return send_from_directory(UPLOAD_DIR, filename)
 
 # ==========================================
 # REQUERIMIENTO 03: REPORTE CONSOLIDADO CON LÍNEA DE TIEMPO
@@ -1699,11 +1730,10 @@ def carga_inteligente_lab():
     
     try:
         filename = f"lab_{id_paciente}_{int(time.time())}_{archivo.filename}"
-        os.makedirs('uploads', exist_ok=True)
-        filepath = os.path.join('uploads', filename)
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        filepath = os.path.join(UPLOAD_DIR, filename)
         archivo.save(filepath)
 
-        client = anthropic.Anthropic()
         extension = filename.lower().split('.')[-1]
 
         system_prompt = (
