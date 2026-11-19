@@ -191,16 +191,18 @@ class ProtocoloBiologicsModel(db.Model):
     __tablename__ = 'protocolos_biologics'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     id_paciente = db.Column(db.String(50), nullable=False)
-    diagnostico_dx = db.Column(db.Text, default="Protocolo Clínico Biologics & Medicina Ortomoleculares.")
+    diagnostico_dx = db.Column(db.Text, default="")
     observaciones = db.Column(db.Text, nullable=True)
+    datos_json = db.Column(db.Text, nullable=True)
     estado = db.Column(db.String(50), default="Sin Cargar")
 
 class ProtocoloAnnovatorModel(db.Model):
     __tablename__ = 'protocolos_annovator'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     id_paciente = db.Column(db.String(50), nullable=False)
-    diagnostico_dx = db.Column(db.Text, default="Protocolo Avanzado Annovator & Innovación Terapéutica.")
+    diagnostico_dx = db.Column(db.Text, default="")
     observaciones = db.Column(db.Text, nullable=True)
+    datos_json = db.Column(db.Text, nullable=True)
     estado = db.Column(db.String(50), default="Sin Cargar")
 
 class ProtocoloWearablesModel(db.Model):
@@ -1389,19 +1391,33 @@ def guardar_biologics():
     id_paciente = request.form.get('id_paciente')
     diagnostico_dx = request.form.get('diagnostico_dx', '')
     observaciones = request.form.get('observaciones', '')
+    datos_extra = {
+        "valor_ido": request.form.get('valor_ido', ''),
+        "valor_spo2": request.form.get('valor_spo2', '')
+    }
     
     archivo = request.files.get('archivo_pdf_biologics')
     if archivo and archivo.filename:
         filename = f"biologics_{id_paciente}_{archivo.filename}"
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         archivo.save(os.path.join(UPLOAD_DIR, filename))
+        datos_extra["archivo_pdf"] = filename
     
     proto = ProtocoloBiologicsModel.query.filter_by(id_paciente=id_paciente).first()
     if not proto:
         proto = ProtocoloBiologicsModel(id_paciente=id_paciente)
         db.session.add(proto)
+    else:
+        try:
+            prev = json.loads(proto.datos_json) if proto.datos_json else {}
+        except Exception:
+            prev = {}
+        if "archivo_pdf" not in datos_extra and prev.get("archivo_pdf"):
+            datos_extra["archivo_pdf"] = prev["archivo_pdf"]
+
     proto.diagnostico_dx = diagnostico_dx
     proto.observaciones = observaciones
+    proto.datos_json = json.dumps(datos_extra)
     proto.estado = "Cargado"
     db.session.commit()
     return redirect(url_for('index', token=token, rol='medico', seccion='biologics', id=id_paciente))
@@ -1412,19 +1428,33 @@ def guardar_annovator():
     id_paciente = request.form.get('id_paciente')
     diagnostico_dx = request.form.get('diagnostico_dx', '')
     observaciones = request.form.get('observaciones', '')
+    datos_extra = {
+        "indice_innovacion": request.form.get('indice_innovacion', ''),
+        "respuesta_celular": request.form.get('respuesta_celular', '')
+    }
     
     archivo = request.files.get('archivo_pdf_annovator')
     if archivo and archivo.filename:
         filename = f"annovator_{id_paciente}_{archivo.filename}"
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         archivo.save(os.path.join(UPLOAD_DIR, filename))
+        datos_extra["archivo_pdf"] = filename
     
     proto = ProtocoloAnnovatorModel.query.filter_by(id_paciente=id_paciente).first()
     if not proto:
         proto = ProtocoloAnnovatorModel(id_paciente=id_paciente)
         db.session.add(proto)
+    else:
+        try:
+            prev = json.loads(proto.datos_json) if proto.datos_json else {}
+        except Exception:
+            prev = {}
+        if "archivo_pdf" not in datos_extra and prev.get("archivo_pdf"):
+            datos_extra["archivo_pdf"] = prev["archivo_pdf"]
+
     proto.diagnostico_dx = diagnostico_dx
     proto.observaciones = observaciones
+    proto.datos_json = json.dumps(datos_extra)
     proto.estado = "Cargado"
     db.session.commit()
     return redirect(url_for('index', token=token, rol='medico', seccion='annovator', id=id_paciente))
