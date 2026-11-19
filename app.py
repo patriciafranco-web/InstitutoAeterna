@@ -228,7 +228,7 @@ class TareaEquipoModel(db.Model):
     medico_emisor = db.Column(db.String(150), nullable=False)
     profesional_destinatario = db.Column(db.String(150), nullable=False)
     mensaje_tarea = db.Column(db.Text, nullable=False)
-    fecha = db.Column(db.String(50), default=datetime.date.today().strftime('%d/%m/%Y'))
+    fecha = db.Column(db.String(50), default=lambda: datetime.date.today().strftime('%d/%m/%Y'))
     estado = db.Column(db.String(50), default="Pendiente")
 
 class EstudioSolicitadoModel(db.Model):
@@ -243,12 +243,19 @@ class EstudioSolicitadoModel(db.Model):
 with app.app_context():
     try:
         db.create_all()
-        db.session.execute(db.text("ALTER TABLE protocolos_biologics ADD COLUMN IF NOT EXISTS datos_json TEXT"))
-        db.session.execute(db.text("ALTER TABLE protocolos_annovator ADD COLUMN IF NOT EXISTS datos_json TEXT"))
-        db.session.commit()
     except Exception as e:
-        db.session.rollback()
-        print("Tablas ya inicializadas / migración:", e)
+        print("Error en db.create_all:", e)
+
+    for sql in [
+        "ALTER TABLE protocolos_biologics ADD COLUMN IF NOT EXISTS datos_json TEXT",
+        "ALTER TABLE protocolos_annovator ADD COLUMN IF NOT EXISTS datos_json TEXT"
+    ]:
+        try:
+            db.session.execute(db.text(sql))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print("Migración omitida/aplicada:", sql, "->", e)
 
 # ==========================================
 # LABORATORIOS AETERNA
@@ -297,6 +304,10 @@ USUARIOS_DB = {
     "ximena.ruiz": {
         "pass": "aeterna2026", "nombre": "Lic. Ximena Ruiz", "rol_base": "medico", "es_socio": False,
         "especialidad": "Nutricionista Clínica & Longevidad"
+    },
+    "belen.romero": {
+        "pass": "aeterna2026", "nombre": "Lic. Belén Romero", "rol_base": "medico", "es_socio": False,
+        "especialidad": "Nutrición Clínica"
     },
     "alfredo.estigarribia": {
         "pass": "aeterna2026", "nombre": "Dr. Alfredo Estigarribia", "rol_base": "medico", "es_socio": False,
