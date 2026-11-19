@@ -111,7 +111,6 @@
             <a href="/?token={{ token }}&rol=medico&seccion=annovator&id={{ p.id }}" class="{% if seccion == 'annovator' %}active{% endif %}">Protocolo Annovator</a>
             <a href="/?token={{ token }}&rol=medico&seccion=wearables&id={{ p.id }}" class="{% if seccion == 'wearables' %}active{% endif %}">Wearables y Biometría</a>
             <a href="/?token={{ token }}&rol=medico&seccion=consentimientos&id={{ p.id }}" class="{% if seccion == 'consentimientos' %}active{% endif %}">Consentimientos</a>
-            <!-- CAMBIADO A PORTAL DE PACIENTE -->
             <a href="/?token={{ token }}&rol=medico&seccion=reporte_hc&id={{ p.id }}" class="{% if seccion == 'reporte_hc' %}active{% endif %}">📁 Portal de Paciente</a>
             {% endif %}
         {% endif %}
@@ -172,10 +171,10 @@
                         <select name="medico" class="form-control">
                             <option value="Dr. Pedro Calabrese">Dr. Pedro Calabrese (Traumatología)</option>
                             <option value="Dra. Fátima López">Dra. Fátima López (Traumatología)</option>
-                            <option value="Dra. Romina Espinola (Metabolismo)">Dra. Romina Espinola (Metabolismo)</option>
-                            <option value="Lic. Belén Romero (Nutrición)">Lic. Belén Romero (Nutrición)</option>
-                            <option value="Dr. Alfredo Estigarribia (Odontología-Sueño)">Dr. Alfredo Estigarribia (Odontología-Sueño)</option>
-                            <option value="Lic. Manuel Ruiz (Preparador físico)">Lic. Manuel Ruiz (Preparador físico)</option>
+                            <option value="Dra. Romina Espinola">Dra. Romina Espinola (Metabolismo)</option>
+                            <option value="Lic. Belén Romero">Lic. Belén Romero (Nutrición)</option>
+                            <option value="Dr. Alfredo Estigarribia">Dr. Alfredo Estigarribia (Odontología-Sueño)</option>
+                            <option value="Lic. Manuel Ruiz">Lic. Manuel Ruiz (Preparador físico)</option>
                         </select>
                     </div>
                     <div style="display: flex; gap: 10px; margin-top: 20px;">
@@ -791,7 +790,7 @@
                 {% endif %}
             </div>
 
-<!-- 4. EXÁMENES NO LABORATORIALES -->
+        <!-- 4. EXÁMENES NO LABORATORIALES -->
         {% elif seccion == 'examenes_no_lab' and p %}
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <a href="/?token={{ token }}&rol=medico&seccion=agenda_medico" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); width: auto;">← VOLVER A MI AGENDA</a>
@@ -931,47 +930,11 @@
 
         <!-- 6. MÓDULO BIOLOGICS -->
         {% elif seccion == 'biologics' and p %}
-            <div class="box">
-                <h3 style="color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-top: 0;">Módulo Biologics & Medicina Ortomolecular — {{ p.nombre }}</h3>
-                <form action="/api/medico/guardar-biologics?token={{ token }}" method="POST" enctype="multipart/form-data">
-                    <input type="hidden" name="id_paciente" value="{{ p.id }}">
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label>Diagnóstico / Indicación:</label>
-                        <input type="text" name="diagnostico_dx" class="form-control" value="{{ proto_biologics.diagnostico_dx if proto_biologics else 'Medicina Ortomolecular Avanzada' }}">
-                    </div>
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label>Observaciones Clínicas:</label>
-                        <textarea name="observaciones" class="form-control" rows="3">{{ proto_biologics.observaciones if proto_biologics else '' }}</textarea>
-                    </div>
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label>Adjuntar Reporte / PDF Biologics:</label>
-                        <input type="file" name="archivo_pdf_biologics" class="form-control" accept=".pdf">
-                    </div>
-                    <button type="submit" class="btn">Guardar Módulo Biologics</button>
-                </form>
-            </div>
+            {% include 'biologics.html' %}
 
         <!-- 7. PROTOCOLO ANNOVATOR -->
         {% elif seccion == 'annovator' and p %}
-            <div class="box">
-                <h3 style="color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-top: 0;">Protocolo Annovator & Innovación Terapéutica — {{ p.nombre }}</h3>
-                <form action="/api/medico/guardar-annovator?token={{ token }}" method="POST" enctype="multipart/form-data">
-                    <input type="hidden" name="id_paciente" value="{{ p.id }}">
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label>Diagnóstico / Protocolo:</label>
-                        <input type="text" name="diagnostico_dx" class="form-control" value="{{ proto_annovator.diagnostico_dx if proto_annovator else 'Innovación Terapéutica Avanzada' }}">
-                    </div>
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label>Observaciones:</label>
-                        <textarea name="observaciones" class="form-control" rows="3">{{ proto_annovator.observaciones if proto_annovator else '' }}</textarea>
-                    </div>
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label>Adjuntar Estudio Annovator:</label>
-                        <input type="file" name="archivo_pdf_annovator" class="form-control" accept=".pdf">
-                    </div>
-                    <button type="submit" class="btn">Guardar Protocolo Annovator</button>
-                </form>
-            </div>
+            {% include 'annovator.html' %}
 
         <!-- 8. WEARABLES Y BIOMETRÍA -->
         {% elif seccion == 'wearables' and p %}
