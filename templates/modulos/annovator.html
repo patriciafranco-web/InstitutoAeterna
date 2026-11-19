@@ -37,7 +37,7 @@
 
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="font-size: 11px; font-weight: bold; color: var(--text-secondary); display: block; margin-bottom: 4px;">Diagnóstico / Protocolo Aplicado:</label>
-                    <input type="text" name="diagnostico_dx" value="{{ proto_annovator.diagnostico_dx if proto_annovator else 'Innovación Terapéutica Avanzada' }}" class="form-control" style="font-size: 12px;">
+                    <input type="text" name="diagnostico_dx" id="inputDiagnosticoAnnovator" value="{{ proto_annovator.diagnostico_dx if proto_annovator else 'Innovación Terapéutica Avanzada' }}" class="form-control" style="font-size: 12px;">
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
@@ -47,7 +47,7 @@
                     </div>
                     <div style="background: rgba(5, 150, 105, 0.08); border: 1px solid rgba(5, 150, 105, 0.3); padding: 12px; border-radius: 6px;">
                         <label style="font-size: 11px; font-weight: bold; color: var(--success); display: block; margin-bottom: 4px;">Respuesta Celular:</label>
-                        <input type="text" value="+14% vs basal" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
+                        <input type="text" id="inputRespuestaAnnovator" value="+14% vs basal" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
                     </div>
                 </div>
 
@@ -80,13 +80,17 @@
             </div>
         </div>
 
-        <!-- ZONA INFERIOR: EL CIERRE (NOTAS, IA Y ASIGNACIÓN MULTIDISCIPLINARIA) -->
+        <!-- ZONA INFERIOR: EL CIERRE (NOTAS, DICTADO, IA Y ASIGNACIÓN MULTIDISCIPLINARIA) -->
         <div style="border-top: 1px solid var(--border); padding-top: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 10px; flex-wrap: wrap;">
                 <label style="font-size: 11.5px; font-weight: bold; color: var(--text-secondary); text-transform: uppercase;">Cuadro de Observaciones & Conclusiones:</label>
-                <button type="button" class="btn" style="background: var(--accent); color: white; padding: 4px 10px; font-size: 10.5px;" onclick="generarConclusionIAAnnovator('Annovator')">✨ Generar Conclusión con IA</button>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span id="estadoDictadoAnnovator" style="font-size: 11px; color: var(--text-secondary);"></span>
+                    <button type="button" class="btn" style="background: #1f2937; color: white; padding: 4px 10px; font-size: 10.5px;" onclick="dictarObservacionAnnovator()">🎤 Dictar Observación</button>
+                    <button type="button" class="btn" style="background: var(--accent); color: white; padding: 4px 10px; font-size: 10.5px;" onclick="generarConclusionIAAnnovator('Annovator')">✨ Generar Conclusión con IA</button>
+                </div>
             </div>
-            <textarea name="observaciones" id="txtObservacionesAnnovator" class="form-control" rows="2" placeholder="Escriba notas o use la IA para redactar la conclusión del protocolo...">{% if proto_annovator %}{{ proto_annovator.observaciones }}{% endif %}</textarea>
+            <textarea name="observaciones" id="txtObservacionesAnnovator" class="form-control" rows="3" placeholder="Escriba notas, dicte por voz o use la IA para redactar la conclusión del protocolo...">{% if proto_annovator %}{{ proto_annovator.observaciones }}{% endif %}</textarea>
 
             <!-- ASIGNACIÓN DE TAREAS AL EQUIPO MULTIDISCIPLINARIO -->
             <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-top: 15px;">
@@ -103,7 +107,7 @@
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-                <button type="button" class="btn" style="background: rgba(248, 113, 113, 0.1); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); font-size: 11.5px;">🗑️ Borrar y Reemplazar</button>
+                <button type="button" class="btn" style="background: rgba(248, 113, 113, 0.1); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); font-size: 11.5px;" onclick="limpiarObservacionesAnnovator()">🗑️ Borrar y Reemplazar</button>
                 <button type="submit" class="btn" style="background: var(--success); color: white; font-size: 11.5px;">💾 Guardar en Expediente</button>
             </div>
         </div>
@@ -111,23 +115,85 @@
 </div>
 
 <script>
+    function dictarObservacionAnnovator() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const estadoEl = document.getElementById('estadoDictadoAnnovator');
+        const txtArea = document.getElementById('txtObservacionesAnnovator');
+
+        if (!SpeechRecognition) {
+            if (estadoEl) estadoEl.innerText = "Dictado no soportado en este navegador.";
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'es-PY';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        if (estadoEl) estadoEl.innerText = "🎙️ Escuchando...";
+
+        recognition.onresult = function(event) {
+            const transcripcion = event.results[0][0].transcript;
+            txtArea.value = txtArea.value ? (txtArea.value + "\n" + transcripcion) : transcripcion;
+            if (estadoEl) estadoEl.innerText = "✅ Dictado agregado.";
+        };
+
+        recognition.onerror = function(event) {
+            if (estadoEl) estadoEl.innerText = "Error de micrófono: " + event.error;
+        };
+
+        recognition.onend = function() {
+            if (estadoEl && estadoEl.innerText === "🎙️ Escuchando...") {
+                estadoEl.innerText = "";
+            }
+        };
+
+        recognition.start();
+    }
+
     function generarConclusionIAAnnovator(modulo) {
         const txtArea = document.getElementById('txtObservacionesAnnovator');
+        const diagEl = document.getElementById('inputDiagnosticoAnnovator');
+        const scoreEl = document.getElementById('inputAnnovatorScore');
+        const respEl = document.getElementById('inputRespuestaAnnovator');
+        const estadoEl = document.getElementById('estadoDictadoAnnovator');
+
+        const textoActual = (txtArea.value || '').trim();
+        const resumenValores = [
+            diagEl ? `Diagnóstico/Protocolo: ${diagEl.value}` : '',
+            scoreEl ? `Índice de Innovación: ${scoreEl.value}` : '',
+            respEl ? `Respuesta Celular: ${respEl.value}` : '',
+            textoActual ? `Notas/Dictado: ${textoActual}` : ''
+        ].filter(Boolean).join(" | ");
+
+        if (estadoEl) estadoEl.innerText = "⏳ Procesando con IA...";
         txtArea.value = "⏳ Analizando protocolo y redactando conclusión clínica con IA...";
-        
+
         fetch('/api/medico/ia-concluir-estudio', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({modulo: modulo, valores: "Índice de Innovación: 88, Respuesta Celular: +14%"})
+            body: JSON.stringify({modulo: modulo, valores: resumenValores})
         })
         .then(res => res.json())
         .then(data => {
             if(data.status === 'success') {
                 txtArea.value = data.conclusion;
+                if (estadoEl) estadoEl.innerText = "✨ Conclusión generada por IA.";
             } else {
-                txtArea.value = "Error al generar conclusión automática.";
+                txtArea.value = textoActual || "Error al generar conclusión automática.";
+                if (estadoEl) estadoEl.innerText = "No se pudo generar con IA.";
             }
+        })
+        .catch(() => {
+            txtArea.value = textoActual;
+            if (estadoEl) estadoEl.innerText = "Error de conexión.";
         });
+    }
+
+    function limpiarObservacionesAnnovator() {
+        document.getElementById('txtObservacionesAnnovator').value = "";
+        const estadoEl = document.getElementById('estadoDictadoAnnovator');
+        if (estadoEl) estadoEl.innerText = "";
     }
 
     function enviarAlertaEquipoAnnovator(idPaciente) {
