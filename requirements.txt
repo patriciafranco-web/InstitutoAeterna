@@ -8,3 +8,4 @@ Pillow
 python-dotenv==1.0.1
 anthropic
 cryptography
+psycopg2-binary
