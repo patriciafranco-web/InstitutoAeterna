@@ -42,7 +42,7 @@
                     </div>
                     <div style="background: rgba(5, 150, 105, 0.08); border: 1px solid rgba(5, 150, 105, 0.3); padding: 12px; border-radius: 6px;">
                         <label style="font-size: 11px; font-weight: bold; color: var(--success); display: block; margin-bottom: 4px;">SpO₂ Mínima:</label>
-                        <input type="text" name="valor_spo2" value="92%" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
+                        <input type="text" id="inputSpO2" name="valor_spo2" value="92%" class="form-control" style="font-size: 12px; font-weight: bold; background: white;">
                     </div>
                 </div>
 
@@ -75,13 +75,17 @@
             </div>
         </div>
 
-        <!-- ZONA INFERIOR: EL CIERRE (NOTAS, IA Y ASIGNACIÓN MULTIDISCIPLINARIA) -->
+        <!-- ZONA INFERIOR: EL CIERRE (NOTAS, DICTADO, IA Y ASIGNACIÓN MULTIDISCIPLINARIA) -->
         <div style="border-top: 1px solid var(--border); padding-top: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 10px; flex-wrap: wrap;">
                 <label style="font-size: 11.5px; font-weight: bold; color: var(--text-secondary); text-transform: uppercase;">Cuadro de Observaciones & Conclusiones:</label>
-                <button type="button" class="btn" style="background: var(--accent); color: white; padding: 4px 10px; font-size: 10.5px;" onclick="generarConclusionIABiologics('Biologics')">✨ Generar Conclusión con IA</button>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span id="estadoDictadoBiologics" style="font-size: 11px; color: var(--text-secondary);"></span>
+                    <button type="button" class="btn" style="background: #1f2937; color: white; padding: 4px 10px; font-size: 10.5px;" onclick="dictarObservacionBiologics()">🎤 Dictar Observación</button>
+                    <button type="button" class="btn" style="background: var(--accent); color: white; padding: 4px 10px; font-size: 10.5px;" onclick="generarConclusionIABiologics('Biologics')">✨ Generar Conclusión con IA</button>
+                </div>
             </div>
-            <textarea name="observaciones" id="txtObservacionesBiologics" class="form-control" rows="2" placeholder="Escriba notas o use la IA para redactar la conclusión del estudio...">{% if proto_biologics %}{{ proto_biologics.observaciones }}{% endif %}</textarea>
+            <textarea name="observaciones" id="txtObservacionesBiologics" class="form-control" rows="3" placeholder="Escriba notas, dicte por voz o use la IA para redactar la conclusión del estudio...">{% if proto_biologics %}{{ proto_biologics.observaciones }}{% endif %}</textarea>
 
             <!-- ASIGNACIÓN DE TAREAS AL EQUIPO MULTIDISCIPLINARIO -->
             <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-top: 15px;">
@@ -98,7 +102,7 @@
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-                <button type="button" class="btn" style="background: rgba(248, 113, 113, 0.1); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); font-size: 11.5px;">🗑️ Borrar y Reemplazar</button>
+                <button type="button" class="btn" style="background: rgba(248, 113, 113, 0.1); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); font-size: 11.5px;" onclick="limpiarObservacionesBiologics()">🗑️ Borrar y Reemplazar</button>
                 <button type="submit" class="btn" style="background: var(--success); color: white; font-size: 11.5px;">💾 Guardar en Expediente</button>
             </div>
         </div>
@@ -117,23 +121,83 @@
     }
     document.addEventListener("DOMContentLoaded", verificarRangosBiologics);
 
+    function dictarObservacionBiologics() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const estadoEl = document.getElementById('estadoDictadoBiologics');
+        const txtArea = document.getElementById('txtObservacionesBiologics');
+
+        if (!SpeechRecognition) {
+            if (estadoEl) estadoEl.innerText = "Dictado no soportado en este navegador.";
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'es-PY';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        if (estadoEl) estadoEl.innerText = "🎙️ Escuchando...";
+
+        recognition.onresult = function(event) {
+            const transcripcion = event.results[0][0].transcript;
+            txtArea.value = txtArea.value ? (txtArea.value + "\n" + transcripcion) : transcripcion;
+            if (estadoEl) estadoEl.innerText = "✅ Dictado agregado.";
+        };
+
+        recognition.onerror = function(event) {
+            if (estadoEl) estadoEl.innerText = "Error de micrófono: " + event.error;
+        };
+
+        recognition.onend = function() {
+            if (estadoEl && estadoEl.innerText === "🎙️ Escuchando...") {
+                estadoEl.innerText = "";
+            }
+        };
+
+        recognition.start();
+    }
+
     function generarConclusionIABiologics(modulo) {
         const txtArea = document.getElementById('txtObservacionesBiologics');
+        const idoEl = document.getElementById('inputIDO');
+        const spo2El = document.getElementById('inputSpO2');
+        const estadoEl = document.getElementById('estadoDictadoBiologics');
+
+        const textoActual = (txtArea.value || '').trim();
+        const resumenValores = [
+            idoEl ? `IDO: ${idoEl.value}` : '',
+            spo2El ? `SpO2 Mínima: ${spo2El.value}` : '',
+            textoActual ? `Notas/Dictado: ${textoActual}` : ''
+        ].filter(Boolean).join(" | ");
+
+        if (estadoEl) estadoEl.innerText = "⏳ Procesando con IA...";
         txtArea.value = "⏳ Analizando biomarcadores y redactando conclusión clínica con IA...";
-        
+
         fetch('/api/medico/ia-concluir-estudio', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({modulo: modulo, valores: "IDO: 35 (Severo), SpO2 Min: 92%"})
+            body: JSON.stringify({modulo: modulo, valores: resumenValores})
         })
         .then(res => res.json())
         .then(data => {
             if(data.status === 'success') {
                 txtArea.value = data.conclusion;
+                if (estadoEl) estadoEl.innerText = "✨ Conclusión generada por IA.";
             } else {
-                txtArea.value = "Error al generar conclusión automática.";
+                txtArea.value = textoActual || "Error al generar conclusión automática.";
+                if (estadoEl) estadoEl.innerText = "No se pudo generar con IA.";
             }
+        })
+        .catch(() => {
+            txtArea.value = textoActual;
+            if (estadoEl) estadoEl.innerText = "Error de conexión.";
         });
+    }
+
+    function limpiarObservacionesBiologics() {
+        document.getElementById('txtObservacionesBiologics').value = "";
+        const estadoEl = document.getElementById('estadoDictadoBiologics');
+        if (estadoEl) estadoEl.innerText = "";
     }
 
     function enviarAlertaEquipo(idPaciente) {
