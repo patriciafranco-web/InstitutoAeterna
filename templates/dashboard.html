@@ -45,6 +45,10 @@
         .badge-bordo { background: rgba(128, 0, 32, 0.08); color: var(--accent); border: 1px solid rgba(128, 0, 32, 0.2); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
         .texto-bordo { color: var(--accent); font-weight: bold; font-size: 11.5px; }
         .texto-verde { color: var(--success); font-weight: bold; font-size: 11.5px; }
+        .caja-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 25px; }
+        @media (max-width: 900px) {
+            .caja-stats-grid { grid-template-columns: 1fr; }
+        }
         
         /* ESTILOS ROBOT ASISTENTE FLOTANTE */
         #chat-flotante-btn { position: fixed; bottom: 25px; right: 25px; background: var(--accent); color: white; width: 55px; height: 55px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); cursor: pointer; z-index: 1000; transition: 0.2s; }
@@ -193,11 +197,17 @@
                 <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px;">
                     Módulo exclusivo para el registro de transacciones, cobros de consultas y emisión de comprobantes legales vinculados al Sanatorio Le Blanc.
                 </p>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+                <div class="caja-stats-grid">
                     <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px;">
-                        <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: bold;">Total Recaudado Hoy</span>
+                        <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: bold;">Recaudado Hoy</span>
                         <div style="font-size: 24px; font-weight: bold; color: var(--success); margin-top: 8px;">
-                            ₲ {{ "{:,.0f}".format(total_recaudado) if total_recaudado else '0' }}
+                            ₲ {{ "{:,.0f}".format(total_recaudado_hoy) if total_recaudado_hoy is defined else '0' }}
+                        </div>
+                    </div>
+                    <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px;">
+                        <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: bold;">Recaudado del Mes</span>
+                        <div style="font-size: 24px; font-weight: bold; color: var(--text-primary); margin-top: 8px;">
+                            ₲ {{ "{:,.0f}".format(total_recaudado_mes) if total_recaudado_mes is defined else '0' }}
                         </div>
                     </div>
                     <div style="background: var(--bg-main); border: 1px solid var(--border); padding: 20px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
@@ -700,7 +710,7 @@
                         <div style="padding: 20px; border-top: 1px solid var(--border); background: var(--card-bg);">
                             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 15px; align-items: center;">
                                 {% if est.origen and est.origen != 'Claude Sonnet 5' and not est.origen.startswith('Informe') %}
-                                <a href="/uploads/lab_{{ p.id }}_{{ est.origen.split('_')[-1] if '_' in est.origen else est.origen }}" target="_blank" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); padding: 5px 10px; font-size: 10.5px; text-decoration: none;">🔍 Ver Documento Original</a>
+                                <a href="/uploads/{{ est.origen }}?token={{ token }}" target="_blank" class="btn" style="background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent); padding: 5px 10px; font-size: 10.5px; text-decoration: none;">🔍 Ver Documento Original</a>
                                 {% endif %}
                                 
                                 <form action="/api/medico/eliminar-examen-lab/{{ est.id }}?token={{ token }}" method="POST" style="margin: 0;" onsubmit="return confirm('¿Desea eliminar este estudio de laboratorio?');">
