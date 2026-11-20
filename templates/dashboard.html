@@ -73,7 +73,7 @@
             <span onclick="toggleChatFlotante()" style="cursor: pointer; font-size: 14px;">✖</span>
         </div>
         <div id="chat-body">
-            <div class="chat-msg ia">¡Hola, Dr. {{ nombre_usuario }}! Soy su asistente clínico de Aeterna. Conozco el expediente completo de {{ p.nombre }}. ¿Qué desea consultar o analizar?</div>
+            <div class="chat-msg ia">¡Hola, {{ nombre_usuario }}! Soy su asistente clínico de Aeterna. Conozco el expediente completo de {{ p.nombre }}. ¿Qué desea consultar o analizar?</div>
         </div>
         <div id="chat-footer">
             <input type="text" id="chat-input-texto" class="form-control" placeholder="Escriba su consulta clínica..." onkeypress="if(event.key === 'Enter') enviarConsultaIA()">
@@ -318,6 +318,28 @@
                 </table>
                 {% else %}
                 <p style="text-align: center; color: var(--text-secondary);">No hay turnos agendados para hoy.</p>
+                {% endif %}
+            </div>
+
+        {% elif seccion == 'lista_recetas' %}
+            <div class="box">
+                <h3 style="color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-top: 0;">Historial de Recetas Electrónicas Emitidas</h3>
+                {% if recetas_db %}
+                <table>
+                    <tr><th>Fecha</th><th>Paciente</th><th>Médico</th><th>Estado</th><th>Dispensación</th><th>Validación QR</th></tr>
+                    {% for r in recetas_db|reverse %}
+                    <tr>
+                        <td>{{ r.fecha }}</td>
+                        <td><b>{{ r.nombre_paciente }}</b></td>
+                        <td>{{ r.nombre_medico }}</td>
+                        <td><span class="{% if r.estado == 'Dispensada' %}texto-verde{% else %}badge-bordo{% endif %}">{{ r.estado }}</span></td>
+                        <td>{{ r.fecha_dispensacion or 'Pendiente' }}</td>
+                        <td><a href="/validar/{{ r.id_receta }}" target="_blank" class="btn" style="padding: 5px 10px; font-size: 10.5px;">🔍 Ver / Validar</a></td>
+                    </tr>
+                    {% endfor %}
+                </table>
+                {% else %}
+                <p style="text-align: center; color: var(--text-secondary); padding: 20px;">No hay recetas emitidas registradas todavía.</p>
                 {% endif %}
             </div>
 
@@ -941,11 +963,11 @@
 
         <!-- 6. MÓDULO BIOLOGICS -->
         {% elif seccion == 'biologics' and p %}
-            {% include 'modulos/biologics.html' %}
+            {% include 'modulos/biologics.html' ignore missing %}
 
         <!-- 7. PROTOCOLO ANNOVATOR -->
         {% elif seccion == 'annovator' and p %}
-            {% include 'modulos/annovator.html' %}
+            {% include 'modulos/annovator.html' ignore missing %}
 
         <!-- 8. WEARABLES Y BIOMETRÍA -->
         {% elif seccion == 'wearables' and p %}
