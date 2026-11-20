@@ -93,6 +93,7 @@ class PacienteModel(db.Model):
     token_portal = db.Column(db.String(100), unique=True, default=lambda: str(uuid.uuid4()))
     nombre = db.Column(db.String(150), nullable=False)
     edad = db.Column(db.Integer, nullable=False)
+    telefono = db.Column(db.String(40), default="")
     programa = db.Column(db.String(150), default="General")
     medico = db.Column(db.String(150), nullable=False)
     entrenador = db.Column(db.String(150), default="Manuel Duarte")
@@ -250,7 +251,8 @@ with app.app_context():
 
     for sql in [
         "ALTER TABLE protocolos_biologics ADD COLUMN IF NOT EXISTS datos_json TEXT",
-        "ALTER TABLE protocolos_annovator ADD COLUMN IF NOT EXISTS datos_json TEXT"
+        "ALTER TABLE protocolos_annovator ADD COLUMN IF NOT EXISTS datos_json TEXT",
+        "ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(40) DEFAULT ''"
     ]:
         try:
             db.session.execute(db.text(sql))
@@ -445,7 +447,7 @@ PORTAL_PRECONSULTA_TEMPLATE = """<!DOCTYPE html>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                 <div class="form-group">
                     <label>Teléfono (WhatsApp):</label>
-                    <input type="text" name="telefono" placeholder="+595 981 ..." required>
+                    <input type="text" name="telefono" value="{{ paciente.telefono or '' }}" placeholder="+595 981 ..." required>
                 </div>
                 <div class="form-group">
                     <label>Correo Electrónico:</label>
@@ -1191,6 +1193,7 @@ def agendar_paciente():
         return resp_error
     nombre = request.form.get('nombre', '').strip()
     edad = int(request.form.get('edad', 30))
+    telefono = request.form.get('telefono', '').strip()
     medico = request.form.get('medico', 'Dr. Pedro Calabrese')
     hora_turno = request.form.get('hora_turno', '09:00 hs')
     
@@ -1199,6 +1202,8 @@ def agendar_paciente():
     if paciente_existente:
         paciente_existente.medico = medico
         paciente_existente.hora_turno = hora_turno
+        if telefono:
+            paciente_existente.telefono = telefono
         paciente_existente.estado_turno = "Confirmado / Sala VIP"
     else:
         nuevo_id = f"p_{random.randint(1000, 9999)}"
@@ -1206,6 +1211,7 @@ def agendar_paciente():
             id=nuevo_id,
             nombre=nombre,
             edad=edad,
+            telefono=telefono,
             programa="General",
             medico=medico,
             hora_turno=hora_turno,
@@ -1216,6 +1222,95 @@ def agendar_paciente():
     db.session.commit()
     
     return redirect(url_for('index', token=token, rol='recepcion', seccion='agenda_admision'))
+
+@app.route('/recepcion/editar-paciente/<string:id_paciente>', methods=['GET', 'POST'])
+def editar_paciente_admision(id_paciente):
+    token, resp_error = verificar_sesion_y_rol(('recepcion', 'admision', 'secretaria'))
+    if not token:
+        return resp_error
+
+    p = PacienteModel.query.filter_by(id=id_paciente).first()
+    if not p:
+        return "Paciente no encontrado", 404
+
+    if request.method == 'POST':
+        p.nombre = request.form.get('nombre', p.nombre).strip()
+        try:
+            p.edad = int(request.form.get('edad', p.edad))
+        except (TypeError, ValueError):
+            pass
+        p.telefono = request.form.get('telefono', '').strip()
+        p.hora_turno = request.form.get('hora_turno', p.hora_turno).strip()
+        p.programa = request.form.get('programa', p.programa).strip() or "General"
+        p.medico = request.form.get('medico', p.medico).strip()
+        db.session.commit()
+        rol_actual = session.get(f'rol_base_{token}', 'recepcion')
+        return redirect(url_for('index', token=token, rol=rol_actual, seccion='agenda_admision'))
+
+    html_editar = """
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <title>Editar Turno — Instituto Aeterna</title>
+        <style>
+            body { font-family: 'Inter', system-ui, sans-serif; background: #f4f6f9; color: #121110; padding: 30px; }
+            .box { max-width: 620px; margin: 0 auto; background: #fff; padding: 32px; border-radius: 8px; border-top: 5px solid #800020; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+            h2 { color: #800020; margin-top: 0; font-size: 17px; text-transform: uppercase; }
+            .form-group { margin-bottom: 15px; }
+            label { display: block; font-size: 11.5px; font-weight: bold; color: #444; text-transform: uppercase; margin-bottom: 5px; }
+            input, select { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; font-size: 13px; }
+            .acciones { display: flex; gap: 10px; margin-top: 22px; }
+            .btn { background: #800020; color: #fff; border: none; padding: 11px 18px; border-radius: 6px; font-weight: bold; font-size: 12px; text-transform: uppercase; cursor: pointer; text-decoration: none; }
+            .btn-sec { background: #e5e7eb; color: #121110; }
+        </style>
+    </head>
+    <body>
+        <div class="box">
+            <h2>Editar Turno y Datos de Contacto</h2>
+            <form method="POST">
+                <div class="form-group"><label>Nombre y Apellido:</label><input type="text" name="nombre" value="{{ p.nombre }}" required></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Edad:</label><input type="number" name="edad" value="{{ p.edad }}" required></div>
+                    <div class="form-group"><label>Teléfono (WhatsApp):</label><input type="text" name="telefono" value="{{ p.telefono or '' }}" placeholder="Ej. 0981123456 o 595981123456"></div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Hora del Turno:</label><input type="text" name="hora_turno" value="{{ p.hora_turno }}" required></div>
+                    <div class="form-group"><label>Programa:</label><input type="text" name="programa" value="{{ p.programa }}"></div>
+                </div>
+                <div class="form-group">
+                    <label>Médico Tratante / Especialista:</label>
+                    <select name="medico">
+                        {% for doc in ['Dr. Pedro Calabrese', 'Dra. Fátima López', 'Dra. Romina Espinola', 'Lic. Ximena Ruiz', 'Lic. Belén Romero', 'Dr. Alfredo Estigarribia', 'Manuel Ruiz Vetun'] %}
+                        <option value="{{ doc }}" {% if p.medico == doc %}selected{% endif %}>{{ doc }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="acciones">
+                    <button type="submit" class="btn">💾 Guardar Cambios</button>
+                    <a href="/?token={{ token }}&rol={{ rol }}&seccion=agenda_admision" class="btn btn-sec">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </body>
+    </html>
+    """
+    rol_actual = session.get(f'rol_base_{token}', 'recepcion')
+    return render_template_string(html_editar, p=p, token=token, rol=rol_actual)
+
+@app.route('/api/admision/eliminar-paciente/<string:id_paciente>', methods=['POST'])
+def eliminar_paciente_admision(id_paciente):
+    token, resp_error = verificar_sesion_y_rol(('recepcion', 'admision', 'secretaria'))
+    if not token:
+        return resp_error
+
+    p = PacienteModel.query.filter_by(id=id_paciente).first()
+    if p:
+        db.session.delete(p)
+        db.session.commit()
+
+    rol_actual = session.get(f'rol_base_{token}', 'recepcion')
+    return redirect(url_for('index', token=token, rol=rol_actual, seccion='agenda_admision'))
 
 @app.route('/api/medico/guardar-plantilla-receta', methods=['POST'])
 def guardar_plantilla_receta():
