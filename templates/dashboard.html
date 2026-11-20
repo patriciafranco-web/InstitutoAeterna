@@ -143,7 +143,12 @@
                     <tr><th>Fecha y Hora</th><th>Paciente</th><th>Teléfono</th><th>Edad</th><th>Programa</th><th>Médico Asignado</th><th style="text-align: center;">Acciones & Preconsulta</th></tr>
                     {% for pat in pacientes %}
                     <tr>
-                        <td><b>{{ pat.hora_turno }}</b></td>
+                        <td>
+                            {% if pat.fecha_turno %}
+                                <div style="font-size: 11px; color: var(--text-secondary);">{{ pat.fecha_turno }}</div>
+                            {% endif %}
+                            <b>{{ pat.hora_turno }}</b>
+                        </td>
                         <td>{{ pat.nombre }}</td>
                         <td>{{ pat.telefono or '—' }}</td>
                         <td>{{ pat.edad }} años</td>
@@ -311,10 +316,15 @@
                 <h3>Mi Agenda de Turnos de Hoy — {{ nombre_usuario }}</h3>
                 {% if pacientes %}
                 <table>
-                    <tr><th>Hora</th><th>Paciente</th><th>Edad</th><th>Programa</th><th>Acción</th></tr>
+                    <tr><th>Fecha y Hora</th><th>Paciente</th><th>Edad</th><th>Programa</th><th>Acción</th></tr>
                     {% for pat in pacientes %}
                     <tr>
-                        <td><b>{{ pat.hora_turno }}</b></td>
+                        <td>
+                            {% if pat.fecha_turno %}
+                                <div style="font-size: 11px; color: var(--text-secondary);">{{ pat.fecha_turno }}</div>
+                            {% endif %}
+                            <b>{{ pat.hora_turno }}</b>
+                        </td>
                         <td>{{ pat.nombre }}</td>
                         <td>{{ pat.edad }} años</td>
                         <td>{{ pat.programa }}</td>
@@ -1329,4 +1339,3 @@
     </script>
 </body>
 </html>
-
