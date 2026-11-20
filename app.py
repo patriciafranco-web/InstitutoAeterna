@@ -68,6 +68,15 @@ def validar_certificado_pfx():
     except Exception as e:
         return False, f"Error certificado: {str(e)}"
 
+def formatear_fecha_turno(valor):
+    texto = (valor or '').strip()
+    if not texto:
+        return ""
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', texto):
+        partes = texto.split('-')
+        return f"{partes[2]}/{partes[1]}/{partes[0]}"
+    return texto
+
 # 1. CONEXIÓN A ANTHROPIC
 client = anthropic.Anthropic()
 
@@ -98,6 +107,7 @@ class PacienteModel(db.Model):
     medico = db.Column(db.String(150), nullable=False)
     entrenador = db.Column(db.String(150), default="Manuel Duarte")
     reg_profesional = db.Column(db.String(50), default="MP 4291")
+    fecha_turno = db.Column(db.String(20), default="")
     hora_turno = db.Column(db.String(50), default="09:00 hs")
     estado_turno = db.Column(db.String(50), default="Confirmado / Sala VIP")
     compromiso = db.Column(db.String(250), default="Pendiente de completar")
@@ -252,7 +262,8 @@ with app.app_context():
     for sql in [
         "ALTER TABLE protocolos_biologics ADD COLUMN IF NOT EXISTS datos_json TEXT",
         "ALTER TABLE protocolos_annovator ADD COLUMN IF NOT EXISTS datos_json TEXT",
-        "ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(40) DEFAULT ''"
+        "ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(40) DEFAULT ''",
+        "ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS fecha_turno VARCHAR(20) DEFAULT ''"
     ]:
         try:
             db.session.execute(db.text(sql))
@@ -1194,6 +1205,7 @@ def agendar_paciente():
     nombre = request.form.get('nombre', '').strip()
     edad = int(request.form.get('edad', 30))
     telefono = request.form.get('telefono', '').strip()
+    fecha_turno = formatear_fecha_turno(request.form.get('fecha_turno', ''))
     medico = request.form.get('medico', 'Dr. Pedro Calabrese')
     hora_turno = request.form.get('hora_turno', '09:00 hs')
     
@@ -1201,6 +1213,8 @@ def agendar_paciente():
     
     if paciente_existente:
         paciente_existente.medico = medico
+        if fecha_turno:
+            paciente_existente.fecha_turno = fecha_turno
         paciente_existente.hora_turno = hora_turno
         if telefono:
             paciente_existente.telefono = telefono
@@ -1214,6 +1228,7 @@ def agendar_paciente():
             telefono=telefono,
             programa="General",
             medico=medico,
+            fecha_turno=fecha_turno,
             hora_turno=hora_turno,
             estado_turno="Confirmado / Sala VIP"
         )
@@ -1240,6 +1255,7 @@ def editar_paciente_admision(id_paciente):
         except (TypeError, ValueError):
             pass
         p.telefono = request.form.get('telefono', '').strip()
+        p.fecha_turno = formatear_fecha_turno(request.form.get('fecha_turno', p.fecha_turno or ''))
         p.hora_turno = request.form.get('hora_turno', p.hora_turno).strip()
         p.programa = request.form.get('programa', p.programa).strip() or "General"
         p.medico = request.form.get('medico', p.medico).strip()
@@ -1274,7 +1290,8 @@ def editar_paciente_admision(id_paciente):
                     <div class="form-group"><label>Edad:</label><input type="number" name="edad" value="{{ p.edad }}" required></div>
                     <div class="form-group"><label>Teléfono (WhatsApp):</label><input type="text" name="telefono" value="{{ p.telefono or '' }}" placeholder="Ej. 0981123456 o 595981123456"></div>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Fecha del Turno:</label><input type="text" name="fecha_turno" value="{{ p.fecha_turno or '' }}" placeholder="DD/MM/AAAA"></div>
                     <div class="form-group"><label>Hora del Turno:</label><input type="text" name="hora_turno" value="{{ p.hora_turno }}" required></div>
                     <div class="form-group"><label>Programa:</label><input type="text" name="programa" value="{{ p.programa }}"></div>
                 </div>
