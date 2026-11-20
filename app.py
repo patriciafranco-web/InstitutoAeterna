@@ -131,7 +131,7 @@ class PagoModel(db.Model):
     cdc = db.Column(db.String(100), nullable=False)
     establecimiento = db.Column(db.String(3), default="001")
     punto_expedicion = db.Column(db.String(3), default="001")
-    numero_documento = db.Column(db.String(7), default="0000010")
+    numero_documento = db.Column(db.String(7), default="0000015")
 
 class PlantillaRecetaModel(db.Model):
     __tablename__ = 'plantillas_recetas'
@@ -2002,7 +2002,7 @@ def headers_mifactu(token_m):
     }
 
 def siguiente_numero_documento(establecimiento, punto_expedicion):
-    ultimo = 9  # Próximo documento a emitir: 0000010
+    ultimo = 14  # Próximo documento a emitir: 0000015 (hasta 0000014 ya fueron aprobados)
     pagos = PagoModel.query.filter_by(establecimiento=establecimiento, punto_expedicion=punto_expedicion).all()
     for p in pagos:
         try:
