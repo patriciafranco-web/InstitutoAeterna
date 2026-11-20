@@ -1,5 +1,7 @@
 from flask import Flask, render_template, render_template_string, request, jsonify, Response, session, redirect, url_for, send_from_directory, send_file
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 import random
 import requests
 import os
@@ -287,53 +289,62 @@ LABORATORIOS_AETERNA = {
 
 USUARIOS_DB = {
     "pedro.calabrese": {
-        "pass": "aeterna2026", "pass_admin": "caja2026",
+        "pass_hash": generate_password_hash("aeterna2026"), "pass_admin_hash": generate_password_hash("caja2026"),
         "nombre": "Dr. Pedro Calabrese", "rol_base": "medico", "es_socio": True,
         "especialidad": "Traumatología y Ortopedia (Socio)"
     },
     "fatima.lopez": {
-        "pass": "aeterna2026", "pass_admin": "caja2026",
+        "pass_hash": generate_password_hash("aeterna2026"), "pass_admin_hash": generate_password_hash("caja2026"),
         "nombre": "Dra. Fátima López", "rol_base": "medico", "es_socio": True,
         "especialidad": "Traumatología y Ortopedia (Socio)"
     },
     "romina.espinola": {
-        "pass": "aeterna2026", "pass_admin": "caja2026",
+        "pass_hash": generate_password_hash("aeterna2026"), "pass_admin_hash": generate_password_hash("caja2026"),
         "nombre": "Dra. Romina Espinola", "rol_base": "medico", "es_socio": True,
         "especialidad": "Medicina Familiar - Pos Endocrinología (Socio)"
     },
     "ximena.ruiz": {
-        "pass": "aeterna2026", "nombre": "Lic. Ximena Ruiz", "rol_base": "medico", "es_socio": False,
+        "pass_hash": generate_password_hash("aeterna2026"), "nombre": "Lic. Ximena Ruiz", "rol_base": "medico", "es_socio": False,
         "especialidad": "Nutricionista Clínica & Longevidad"
     },
     "belen.romero": {
-        "pass": "aeterna2026", "nombre": "Lic. Belén Romero", "rol_base": "medico", "es_socio": False,
+        "pass_hash": generate_password_hash("aeterna2026"), "nombre": "Lic. Belén Romero", "rol_base": "medico", "es_socio": False,
         "especialidad": "Nutrición Clínica"
     },
     "alfredo.estigarribia": {
-        "pass": "aeterna2026", "nombre": "Dr. Alfredo Estigarribia", "rol_base": "medico", "es_socio": False,
+        "pass_hash": generate_password_hash("aeterna2026"), "nombre": "Dr. Alfredo Estigarribia", "rol_base": "medico", "es_socio": False,
         "especialidad": "Odontología del Sueño"
     },
     "manuel.duarte": {
-        "pass": "aeterna2026", "nombre": "Manuel Duarte", "rol_base": "entrenador", "es_socio": False,
+        "pass_hash": generate_password_hash("aeterna2026"), "nombre": "Manuel Duarte", "rol_base": "entrenador", "es_socio": False,
         "especialidad": "Preparador Físico / Performance Coach"
     },
     "nadia.bortolace": {
-        "pass": "caja2026", "nombre": "Nadia Bortolace", "rol_base": "secretaria", "es_socio": False,
+        "pass_hash": generate_password_hash("caja2026"), "nombre": "Nadia Bortolace", "rol_base": "secretaria", "es_socio": False,
         "especialidad": "Gestión Financiera & Facturación Sifen"
     },
     "daiana.gomez": {
-        "pass": "caja2026", "nombre": "Daiana Gomez", "rol_base": "secretaria", "es_socio": False,
+        "pass_hash": generate_password_hash("caja2026"), "nombre": "Daiana Gomez", "rol_base": "secretaria", "es_socio": False,
         "especialidad": "Gestión Financiera & Facturación Sifen"
     },
     "buro": {
-        "pass": "admin2026", "nombre": "Buró (Administración / Contabilidad)", "rol_base": "secretaria", "es_socio": False,
+        "pass_hash": generate_password_hash("admin2026"), "nombre": "Buró (Administración / Contabilidad)", "rol_base": "secretaria", "es_socio": False,
         "especialidad": "Administración General & Facturación Sifen"
     },
     "recepcion": {
-        "pass": "recepcion2026", "nombre": "Admisión / Recepción", "rol_base": "recepcion", "es_socio": False,
+        "pass_hash": generate_password_hash("recepcion2026"), "nombre": "Admisión / Recepción", "rol_base": "recepcion", "es_socio": False,
         "especialidad": "Gestión de Caja y Ventas"
     }
 }
+
+def verificar_sesion_y_rol(roles_permitidos=None):
+    token = request.args.get('token') or request.form.get('token')
+    if not token or f'user_{token}' not in session:
+        return None, redirect(url_for('login'))
+    rol_actual = session.get(f'rol_base_{token}')
+    if roles_permitidos and rol_actual not in roles_permitidos:
+        return None, ("Acceso denegado para su rol.", 403)
+    return token, None
 
 LOGIN_TEMPLATE = """<!DOCTYPE html>
 <html lang="es">
@@ -763,7 +774,13 @@ def login():
         
         if username in USUARIOS_DB:
             user_info = USUARIOS_DB[username]
-            if password == user_info["pass"] or (user_info.get("es_socio") and password == user_info.get("pass_admin")):
+            valida_normal = check_password_hash(user_info["pass_hash"], password)
+            valida_admin = (
+                user_info.get("es_socio")
+                and bool(user_info.get("pass_admin_hash"))
+                and check_password_hash(user_info["pass_admin_hash"], password)
+            )
+            if valida_normal or valida_admin:
                 session_token = f"{username}_{random.randint(1000, 9999)}"
                 session['active_token'] = session_token
                 session[f'user_{session_token}'] = username
@@ -835,8 +852,17 @@ def index():
         except Exception:
             pre_consulta_dict = {}
 
+    hora_py = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-3)))
+    hoy_str = hora_py.strftime('%d/%m/%Y')
+    mes_anio_str = hora_py.strftime('%m/%Y')
+
     pagos_db = PagoModel.query.all()
     total_recaudado = sum(p.monto for p in pagos_db)
+    total_recaudado_hoy = sum(p.monto for p in pagos_db if p.fecha == hoy_str)
+    total_recaudado_mes = sum(
+        p.monto for p in pagos_db
+        if isinstance(p.fecha, str) and p.fecha.endswith(f"/{mes_anio_str}")
+    )
     
     estudios_no_lab = EstudioNoLabModel.query.filter_by(id_paciente=paciente_actual.id).all() if paciente_actual else []
     estudios_lab = EstudioLabModel.query.filter_by(id_paciente=paciente_actual.id).all() if paciente_actual else []
@@ -872,6 +898,8 @@ def index():
         pacientes=pacientes_db,
         pagos=pagos_db,
         total_recaudado=total_recaudado,
+        total_recaudado_hoy=total_recaudado_hoy,
+        total_recaudado_mes=total_recaudado_mes,
         laboratorios_aeterna=LABORATORIOS_AETERNA,
         estudios_no_lab=estudios_no_lab,
         estudios_lab=estudios_lab,
@@ -1154,7 +1182,9 @@ def portal_preconsulta_guardar_por_token(token_portal):
 
 @app.route('/api/admision/agendar-paciente', methods=['POST'])
 def agendar_paciente():
-    token = request.args.get('token')
+    token, resp_error = verificar_sesion_y_rol(('recepcion', 'admision', 'secretaria', 'medico'))
+    if not token:
+        return resp_error
     nombre = request.form.get('nombre', '').strip()
     edad = int(request.form.get('edad', 30))
     medico = request.form.get('medico', 'Dr. Pedro Calabrese')
@@ -1185,7 +1215,9 @@ def agendar_paciente():
 
 @app.route('/api/medico/guardar-plantilla-receta', methods=['POST'])
 def guardar_plantilla_receta():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     nombre = request.form.get('nombre_plantilla', '').strip()
     contenido = request.form.get('contenido_plantilla', '').strip()
     id_paciente = request.form.get('id_paciente', '')
@@ -1201,6 +1233,9 @@ def guardar_plantilla_receta():
 
 @app.route('/api/medico/transcribir-voz-soap', methods=['POST'])
 def transcribir_voz_soap():
+    token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
+    if not token:
+        return jsonify({"status": "error", "mensaje": "No autorizado."}), 403
     try:
         data = request.get_json(silent=True) or {}
         texto_dictado = data.get('texto', '')
@@ -1231,6 +1266,9 @@ def transcribir_voz_soap():
 
 @app.route('/api/medico/asistir-protocolo-ia', methods=['POST'])
 def asistir_protocolo_ia():
+    token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
+    if not token:
+        return jsonify({"status": "error", "mensaje": "No autorizado."}), 403
     try:
         data = request.get_json(silent=True) or {}
         texto = (data.get('texto') or '').strip()
@@ -1261,12 +1299,13 @@ def asistir_protocolo_ia():
 
 @app.route('/api/medico/guardar-evolucion-soap', methods=['POST'])
 def guardar_evolucion_soap():
+    token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
+    if not token:
+        return jsonify({"status": "error", "mensaje": "No autorizado."}), 403
     try:
         data = request.get_json(silent=True) or {}
         id_paciente = data.get('id_paciente')
         nota_soap = data.get('nota')
-        
-        token = request.args.get('token') or session.get('active_token')
         medico_actual = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
         
         if not nota_soap or not id_paciente:
@@ -1287,15 +1326,18 @@ def guardar_evolucion_soap():
 
 @app.route('/api/medico/subir-foto-evolucion', methods=['POST'])
 def subir_foto_evolucion():
+    token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
+    if not token:
+        return resp_error
     try:
-        token = request.args.get('token')
         id_paciente = request.form.get('id_paciente')
         tipo = request.form.get('tipo')
         archivo = request.files.get('foto')
         
         if archivo and id_paciente:
             os.makedirs(FOTOS_CLINICAS_DIR, exist_ok=True)
-            filename = f"paciente_{id_paciente}_{tipo}_{int(time.time())}.jpg"
+            nombre_seguro = secure_filename(archivo.filename or "foto.jpg")
+            filename = f"paciente_{id_paciente}_{tipo}_{int(time.time())}_{nombre_seguro}"
             filepath = os.path.join(FOTOS_CLINICAS_DIR, filename)
             archivo.save(filepath)
             
@@ -1319,10 +1361,13 @@ def ver_foto_clinica(filename):
     token = request.args.get('token')
     if not token or f'user_{token}' not in session:
         return redirect(url_for('login'))
-    return send_from_directory(FOTOS_CLINICAS_DIR, filename)
+    return send_from_directory(FOTOS_CLINICAS_DIR, secure_filename(filename))
 
 @app.route('/api/medico/ia-concluir-estudio', methods=['POST'])
 def ia_concluir_estudio():
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return jsonify({"status": "error", "conclusion": "No autorizado."}), 403
     try:
         data = request.get_json() or {}
         valores = data.get('valores', 'Sin valores')
@@ -1341,6 +1386,9 @@ def ia_concluir_estudio():
 
 @app.route('/api/medico/guardar-nota-libre', methods=['POST'])
 def guardar_nota_libre():
+    token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
+    if not token:
+        return jsonify({"status": "error", "mensaje": "No autorizado."}), 403
     data = request.get_json() if request.is_json else request.form
     id_paciente = data.get('id_paciente')
     nota = data.get('nota', '')
@@ -1354,7 +1402,9 @@ def guardar_nota_libre():
 
 @app.route('/api/medico/guardar-receta-texto', methods=['POST'])
 def guardar_receta_texto():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     texto_receta = request.form.get('receta_texto', '')
     
@@ -1367,7 +1417,9 @@ def guardar_receta_texto():
 
 @app.route('/api/medico/guardar-protocolo-regenerativo', methods=['POST'])
 def guardar_protocolo_regenerativo():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     diagnostico_dx = request.form.get('diagnostico_dx', '')
     
@@ -1402,7 +1454,9 @@ def guardar_protocolo_regenerativo():
 
 @app.route('/api/medico/guardar-biologics', methods=['POST'])
 def guardar_biologics():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     diagnostico_dx = request.form.get('diagnostico_dx', '')
     observaciones = request.form.get('observaciones', '')
@@ -1413,7 +1467,8 @@ def guardar_biologics():
     
     archivo = request.files.get('archivo_pdf_biologics')
     if archivo and archivo.filename:
-        filename = f"biologics_{id_paciente}_{archivo.filename}"
+        nombre_seguro = secure_filename(archivo.filename)
+        filename = f"biologics_{id_paciente}_{nombre_seguro}"
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         archivo.save(os.path.join(UPLOAD_DIR, filename))
         datos_extra["archivo_pdf"] = filename
@@ -1439,7 +1494,9 @@ def guardar_biologics():
 
 @app.route('/api/medico/guardar-annovator', methods=['POST'])
 def guardar_annovator():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     diagnostico_dx = request.form.get('diagnostico_dx', '')
     observaciones = request.form.get('observaciones', '')
@@ -1450,7 +1507,8 @@ def guardar_annovator():
     
     archivo = request.files.get('archivo_pdf_annovator')
     if archivo and archivo.filename:
-        filename = f"annovator_{id_paciente}_{archivo.filename}"
+        nombre_seguro = secure_filename(archivo.filename)
+        filename = f"annovator_{id_paciente}_{nombre_seguro}"
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         archivo.save(os.path.join(UPLOAD_DIR, filename))
         datos_extra["archivo_pdf"] = filename
@@ -1476,7 +1534,9 @@ def guardar_annovator():
 
 @app.route('/api/medico/guardar-wearables', methods=['POST'])
 def guardar_wearables():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     observaciones = request.form.get('observaciones', '')
     
@@ -1510,7 +1570,9 @@ def sincronizar_salud_movil():
 
 @app.route('/api/medico/guardar-consentimiento', methods=['POST'])
 def guardar_consentimiento():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     tipo_plantilla = request.form.get('tipo_plantilla')
     clausulas = request.form.get('clausulas_adicionales', '')
@@ -1528,7 +1590,9 @@ def guardar_consentimiento():
 
 @app.route('/api/medico/asignar-equipo', methods=['POST'])
 def asignar_equipo():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
+    if not token:
+        return jsonify({"status": "error", "mensaje": "No autorizado."}), 403
     id_paciente = request.form.get('id_paciente')
     profesional = request.form.get('profesional')
     mensaje_tarea = request.form.get('mensaje_tarea')
@@ -1551,7 +1615,9 @@ def asignar_equipo():
 
 @app.route('/api/equipo/completar-tarea/<int:id_tarea>')
 def completar_tarea(id_tarea):
-    token = request.args.get('token')
+    token, resp_error = verificar_sesion_y_rol()
+    if not token:
+        return resp_error
     tarea = TareaEquipoModel.query.get(id_tarea)
     if tarea:
         tarea.estado = "Completada"
@@ -1560,7 +1626,9 @@ def completar_tarea(id_tarea):
 
 @app.route('/api/medico/guardar-informe-no-lab', methods=['POST'])
 def guardar_informe_no_lab():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     titulo = request.form.get('titulo_estudio')
     dictamen = request.form.get('dictamen')
@@ -1583,13 +1651,15 @@ def guardar_informe_no_lab():
 
 @app.route('/api/medico/subir-estudio-no-lab', methods=['POST'])
 def subir_estudio_no_lab():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     archivo = request.files.get('archivo_estudio')
     nombre_medico = session.get(f'nombre_{token}', 'Dr. Pedro Calabrese')
 
-    if archivo and id_paciente:
-        filename = archivo.filename
+    if archivo and archivo.filename and id_paciente:
+        filename = secure_filename(archivo.filename)
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         archivo.save(os.path.join(UPLOAD_DIR, filename))
 
@@ -1609,7 +1679,9 @@ def subir_estudio_no_lab():
 
 @app.route('/api/medico/eliminar-estudio-no-lab/<int:id_estudio>', methods=['POST'])
 def eliminar_estudio_no_lab(id_estudio):
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     
     estudio = EstudioNoLabModel.query.get(id_estudio)
@@ -1621,7 +1693,9 @@ def eliminar_estudio_no_lab(id_estudio):
 
 @app.route('/api/medico/eliminar-examen-lab/<int:id_estudio>', methods=['POST'])
 def eliminar_examen_lab(id_estudio):
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     
     estudio = EstudioLabModel.query.get(id_estudio)
@@ -1636,16 +1710,16 @@ def ver_archivo_subido(filename):
     token = request.args.get('token')
     if not token or f'user_{token}' not in session:
         return redirect(url_for('login'))
-    return send_from_directory(UPLOAD_DIR, filename)
+    return send_from_directory(UPLOAD_DIR, secure_filename(filename))
 
 # ==========================================
 # REQUERIMIENTO 03: REPORTE CONSOLIDADO CON LÍNEA DE TIEMPO
 # ==========================================
 @app.route('/medico/reporte-laboratorios/<string:id_paciente>')
 def reporte_laboratorios(id_paciente):
-    token = request.args.get('token')
-    if not token or f'user_{token}' not in session:
-        return redirect(url_for('login'))
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
         
     p = PacienteModel.query.filter_by(id=id_paciente).first()
     if not p:
@@ -1705,11 +1779,10 @@ def reporte_laboratorios(id_paciente):
 # ==========================================
 @app.route('/medico/imprimir-receta/<id_paciente>')
 def imprimir_receta(id_paciente):
-    token = request.args.get('token')
-    formato = request.args.get('formato', 'A5') 
-    
-    if not token or f'user_{token}' not in session:
-        return redirect(url_for('login'))
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
+    formato = request.args.get('formato', 'A5')
     
     p = PacienteModel.query.filter_by(id=id_paciente).first()
     if not p:
@@ -1764,7 +1837,9 @@ def validar_receta(id_receta):
 
 @app.route('/api/medico/carga-inteligente-lab', methods=['POST'])
 def carga_inteligente_lab():
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     id_paciente = request.form.get('id_paciente')
     archivo = request.files.get('archivo_lab')
 
@@ -1774,7 +1849,8 @@ def carga_inteligente_lab():
     dictamen_ia = ""
     
     try:
-        filename = f"lab_{id_paciente}_{int(time.time())}_{archivo.filename}"
+        nombre_seguro = secure_filename(archivo.filename)
+        filename = f"lab_{id_paciente}_{int(time.time())}_{nombre_seguro}"
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         filepath = os.path.join(UPLOAD_DIR, filename)
         archivo.save(filepath)
@@ -1851,9 +1927,9 @@ def carga_inteligente_lab():
         nuevo_estudio = EstudioLabModel(
             id_paciente=id_paciente,
             fecha=datetime.date.today().strftime('%d/%m/%Y'),
-            titulo=f"Lab Móvil / WhatsApp: {archivo.filename}",
+            titulo=f"Lab Móvil / WhatsApp: {filename}",
             dictamen=dictamen_visual,
-            origen=archivo.filename,
+            origen=filename,
             medico="Motor Inteligente",
             estado="Completado"
         )
@@ -1897,7 +1973,9 @@ def carga_inteligente_lab():
 
 @app.route('/api/medico/editar-examen-lab/<int:id_estudio>', methods=['POST'])
 def editar_examen_lab(id_estudio):
-    token = request.args.get('token') or request.form.get('token')
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     dictamen_editado = request.form.get('dictamen')
     
     estudio = EstudioLabModel.query.get(id_estudio)
@@ -1915,9 +1993,9 @@ def editar_examen_lab(id_estudio):
 # ==========================================
 @app.route('/api/medico/generar-orden-lab', methods=['POST'])
 def generar_orden_lab():
-    token = request.args.get('token')
-    if not token or f'user_{token}' not in session:
-        return redirect(url_for('login'))
+    token, resp_error = verificar_sesion_y_rol(('medico',))
+    if not token:
+        return resp_error
     
     id_paciente = request.form.get('id_paciente')
     estudios_seleccionados = request.form.getlist('estudios')
@@ -2041,9 +2119,9 @@ def consultar_estado_mifactu(token_m, est, pun, num, esperas=(0,)):
 
 @app.route('/api/caja/registrar-pago', methods=['POST'])
 def registrar_pago_sifen():
-    token = request.args.get('token')
-    if not token or f'user_{token}' not in session:
-        return redirect(url_for('login'))
+    token, resp_error = verificar_sesion_y_rol(('secretaria', 'recepcion', 'admision'))
+    if not token:
+        return resp_error
         
     paciente_nombre = request.form.get('paciente', 'Paciente General').strip() or 'Paciente General'
     ruc_cliente = request.form.get('ruc_cliente', '').strip()
@@ -2208,9 +2286,9 @@ def registrar_pago_sifen():
 
 @app.route('/api/caja/descargar-kude/<int:pago_id>', methods=['GET'])
 def descargar_kude_oficial(pago_id):
-    token = request.args.get('token')
-    if not token or f'user_{token}' not in session:
-        return redirect(url_for('login'))
+    token, resp_error = verificar_sesion_y_rol(('secretaria', 'recepcion', 'admision'))
+    if not token:
+        return resp_error
         
     pago = PagoModel.query.get_or_404(pago_id)
     token_mifactu = obtener_token_mifactu()
