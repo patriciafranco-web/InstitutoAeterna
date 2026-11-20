@@ -316,7 +316,7 @@ USUARIOS_DB = {
         "especialidad": "Odontología del Sueño"
     },
     "manuel.duarte": {
-        "pass_hash": generate_password_hash("aeterna2026"), "nombre": "Manuel Duarte", "rol_base": "entrenador", "es_socio": False,
+        "pass_hash": generate_password_hash("aeterna2026"), "nombre": "Manuel Ruiz Vetun", "rol_base": "entrenador", "es_socio": False,
         "especialidad": "Preparador Físico / Performance Coach"
     },
     "nadia.bortolace": {
@@ -833,9 +833,13 @@ def index():
     id_paciente = request.args.get('id')
     
     if rol == 'medico':
-        partes_nombre = nombre_usuario.replace('Dra.', '').replace('Dr.', '').replace('Lic.', '').strip()
-        palabra_clave = partes_nombre.split('(')[0].strip().split()[-1]
-        pacientes_db = PacienteModel.query.filter(PacienteModel.medico.ilike(f"%{palabra_clave}%")).all()
+        nombre_limpio = nombre_usuario.replace('Dra.', '').replace('Dr.', '').replace('Lic.', '').split('(')[0].strip()
+        pacientes_db = PacienteModel.query.filter(
+            db.or_(
+                PacienteModel.medico.ilike(f"%{nombre_limpio}%"),
+                PacienteModel.entrenador.ilike(f"%{nombre_limpio}%")
+            )
+        ).all()
     else:
         pacientes_db = PacienteModel.query.all()
 
@@ -1297,6 +1301,51 @@ def asistir_protocolo_ia():
     except Exception as e:
         return jsonify({"status": "error", "mensaje": f"Error técnico: {str(e)}"}), 500
 
+@app.route('/api/medico/asistente-ia', methods=['POST'])
+def asistente_ia_clinico():
+    token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
+    if not token:
+        return jsonify({"respuesta": "No autorizado."}), 403
+    try:
+        data = request.get_json(silent=True) or {}
+        mensaje = (data.get('mensaje') or '').strip()
+        id_paciente = (data.get('id_paciente') or '').strip()
+
+        if not mensaje:
+            return jsonify({"respuesta": "Escriba una consulta para el asistente."})
+
+        contexto_pac = ""
+        if id_paciente:
+            pac = PacienteModel.query.filter_by(id=id_paciente).first()
+            if pac:
+                consultas = ConsultaModel.query.filter_by(id_paciente=id_paciente).all()
+                bios = BiomarcadorModel.query.filter_by(id_paciente=id_paciente).all()
+                resumen_c = "\n".join([f"- [{c.fecha}] {c.medico}: {c.detalle[:250]}" for c in consultas[-5:]])
+                resumen_b = "\n".join([f"- [{b.fecha}] {b.parametro}: {b.valor} {b.unidad}" for b in bios[-15:]])
+                contexto_pac = (
+                    f"Paciente: {pac.nombre} ({pac.edad} años), Programa: {pac.programa}, Médico: {pac.medico}.\n"
+                    f"Pre-consulta: {pac.pre_consulta_json or 'Sin datos'}.\n"
+                    f"Últimas consultas:\n{resumen_c or 'Ninguna'}\n"
+                    f"Biomarcadores recientes:\n{resumen_b or 'Ninguno'}"
+                )
+
+        resp = client.messages.create(
+            model="claude-sonnet-5-5",
+            max_tokens=1500,
+            system=(
+                "Eres el asistente clínico interno del Instituto Aeterna. Responde en español de forma clara, "
+                "concisa y clínica basándote únicamente en el expediente provisto. No inventes datos ni dosis."
+            ),
+            messages=[{
+                "role": "user",
+                "content": f"{contexto_pac}\n\nConsulta del profesional: {mensaje}"
+            }]
+        )
+        texto_resp = "".join(b.text for b in resp.content if hasattr(b, 'text')).strip()
+        return jsonify({"respuesta": texto_resp or "Sin respuesta disponible."})
+    except Exception as e:
+        return jsonify({"respuesta": f"Error al consultar la IA: {str(e)}"}), 500
+
 @app.route('/api/medico/guardar-evolucion-soap', methods=['POST'])
 def guardar_evolucion_soap():
     token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
@@ -1711,6 +1760,87 @@ def ver_archivo_subido(filename):
     if not token or f'user_{token}' not in session:
         return redirect(url_for('login'))
     return send_from_directory(UPLOAD_DIR, secure_filename(filename))
+
+# ==========================================
+# REPORTE CONSOLIDADO CON MEMBRETE (EXPEDIENTE)
+# ==========================================
+@app.route('/medico/reporte-paciente/<string:id_paciente>')
+def reporte_paciente_membrete(id_paciente):
+    token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
+    if not token:
+        return resp_error
+
+    p = PacienteModel.query.filter_by(id=id_paciente).first()
+    if not p:
+        return "Paciente no encontrado", 404
+
+    consultas = ConsultaModel.query.filter_by(id_paciente=id_paciente).all()
+    biomarcadores = BiomarcadorModel.query.filter_by(id_paciente=id_paciente).all()
+    pre_data = {}
+    if p.pre_consulta_json:
+        try:
+            pre_data = json.loads(p.pre_consulta_json)
+        except Exception:
+            pre_data = {}
+
+    html_membrete = """
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <title>Reporte Clínico — {{ p.nombre }}</title>
+        <style>
+            body { font-family: 'Inter', Arial, sans-serif; padding: 36px; color: #121110; line-height: 1.5; }
+            .header { border-bottom: 3px solid #800020; padding-bottom: 12px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+            h1 { color: #800020; font-size: 18px; margin: 0; text-transform: uppercase; }
+            h3 { color: #800020; font-size: 13px; text-transform: uppercase; margin-top: 24px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
+            th { background: #f4f6f9; }
+            @media print { .no-print { display: none; } }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div>
+                <h1>Instituto Aeterna E.A.S. — Sanatorio Le Blanc</h1>
+                <div style="font-size: 11.5px; color: #555;">RUC: 80172292-6 | Ciudad del Este, Paraguay</div>
+            </div>
+            <div style="text-align: right; font-size: 11.5px;">
+                <b>Expediente Clínico</b><br>{{ p.nombre }} ({{ p.edad }} años)
+            </div>
+        </div>
+        <p><b>Médico Asignado:</b> {{ p.medico }} | <b>Programa:</b> {{ p.programa }} | <b>Compromiso:</b> {{ p.compromiso }}</p>
+        {% if p.observacion_medica_libre %}
+        <p><b>Observación Médica:</b> {{ p.observacion_medica_libre }}</p>
+        {% endif %}
+        {% if pre_data.get('objetivos') or pre_data.get('queja_principal') %}
+        <h3>Resumen Pre-Consulta 360°</h3>
+        <p><b>Objetivos:</b> {{ pre_data.get('objetivos', 'N/A') }}<br><b>Queja Principal:</b> {{ pre_data.get('queja_principal', 'N/A') }}</p>
+        {% endif %}
+        <h3>Historial de Evoluciones</h3>
+        {% for c in consultas %}
+        <div style="margin-bottom: 12px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;">
+            <b>{{ c.fecha }} — {{ c.medico }}</b>
+            <div style="white-space: pre-wrap; margin-top: 4px;">{{ c.detalle }}</div>
+        </div>
+        {% else %}
+        <p style="font-size: 12px; color: #666;">Sin evoluciones registradas.</p>
+        {% endfor %}
+        <h3>Biomarcadores Registrados</h3>
+        <table>
+            <tr><th>Parámetro</th><th>Fecha</th><th>Valor</th><th>Unidad</th></tr>
+            {% for b in biomarcadores %}
+            <tr><td>{{ b.parametro }}</td><td>{{ b.fecha }}</td><td>{{ b.valor }}</td><td>{{ b.unidad }}</td></tr>
+            {% else %}
+            <tr><td colspan="4" style="text-align: center;">Sin biomarcadores cargados.</td></tr>
+            {% endfor %}
+        </table>
+        <button class="no-print" onclick="window.print()" style="margin-top: 24px; padding: 10px 18px; background: #800020; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🖨️ Imprimir Expediente</button>
+    </body>
+    </html>
+    """
+    return render_template_string(html_membrete, p=p, consultas=consultas, biomarcadores=biomarcadores, pre_data=pre_data)
 
 # ==========================================
 # REQUERIMIENTO 03: REPORTE CONSOLIDADO CON LÍNEA DE TIEMPO
