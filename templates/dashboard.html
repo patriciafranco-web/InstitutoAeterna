@@ -140,17 +140,22 @@
                 
                 {% if pacientes %}
                 <table>
-                    <tr><th>Fecha y Hora</th><th>Paciente</th><th>Edad</th><th>Programa</th><th>Médico Asignado</th><th style="text-align: center;">Acciones & Preconsulta</th></tr>
+                    <tr><th>Fecha y Hora</th><th>Paciente</th><th>Teléfono</th><th>Edad</th><th>Programa</th><th>Médico Asignado</th><th style="text-align: center;">Acciones & Preconsulta</th></tr>
                     {% for pat in pacientes %}
                     <tr>
                         <td><b>{{ pat.hora_turno }}</b></td>
                         <td>{{ pat.nombre }}</td>
+                        <td>{{ pat.telefono or '—' }}</td>
                         <td>{{ pat.edad }} años</td>
                         <td>{{ pat.programa }}</td>
                         <td>{{ pat.medico }}</td>
-                        <td style="text-align: center; display: flex; gap: 8px; justify-content: center;">
-                            <button class="btn" onclick="enviarWhatsAppPreConsulta('{{ pat.token_portal }}', '{{ pat.nombre }}')" style="padding: 6px 12px; font-size: 11px; width: auto; background: #25d366; color: #fff;">💬 Enviar Link 360</button>
-                            <a href="/recepcion/imprimir-preconsulta/{{ pat.id }}?token={{ token }}" target="_blank" class="btn" style="background: var(--accent); color: white; padding: 6px 12px; font-size: 11px; text-decoration: none; width: auto;">🖨️ Ver / Imprimir Preconsulta</a>
+                        <td style="text-align: center; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
+                            <button class="btn" onclick="enviarWhatsAppPreConsulta('{{ pat.token_portal }}', '{{ pat.nombre }}', '{{ pat.telefono or '' }}')" style="padding: 6px 10px; font-size: 11px; width: auto; background: #25d366; color: #fff;">💬 Enviar Link 360</button>
+                            <a href="/recepcion/imprimir-preconsulta/{{ pat.id }}?token={{ token }}" target="_blank" class="btn" style="background: var(--accent); color: white; padding: 6px 10px; font-size: 11px; text-decoration: none; width: auto;">🖨️ Preconsulta</a>
+                            <a href="/recepcion/editar-paciente/{{ pat.id }}?token={{ token }}" class="btn" style="background: #374151; color: white; padding: 6px 10px; font-size: 11px; text-decoration: none; width: auto;">✏️ Editar</a>
+                            <form action="/api/admision/eliminar-paciente/{{ pat.id }}?token={{ token }}" method="POST" style="margin: 0;" onsubmit="return confirm('¿Desea eliminar este turno de la agenda?');">
+                                <button type="submit" class="btn" style="background: #dc2626; color: white; padding: 6px 10px; font-size: 11px; width: auto;">🗑️</button>
+                            </form>
                         </td>
                     </tr>
                     {% endfor %}
@@ -167,9 +172,12 @@
                     <div class="form-group"><label>Nombre y Apellido:</label><input type="text" name="nombre" class="form-control" required></div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div class="form-group"><label>Edad:</label><input type="number" name="edad" class="form-control" required></div>
-                        <div class="form-group"><label>Fecha del Turno:</label><input type="date" name="fecha_turno" class="form-control" required></div>
+                        <div class="form-group"><label>Teléfono (WhatsApp):</label><input type="text" name="telefono" class="form-control" placeholder="Ej. 0981123456 o 595981123456"></div>
                     </div>
-                    <div class="form-group"><label>Hora del Turno:</label><input type="text" name="hora_turno" class="form-control" required placeholder="09:00 hs"></div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group"><label>Fecha del Turno:</label><input type="date" name="fecha_turno" class="form-control" required></div>
+                        <div class="form-group"><label>Hora del Turno:</label><input type="text" name="hora_turno" class="form-control" required placeholder="09:00 hs"></div>
+                    </div>
                     <div class="form-group">
                         <label>Médico Tratante / Especialista:</label>
                         <select name="medico" class="form-control">
@@ -349,7 +357,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 20px;">
                     <h3 style="margin: 0; border: none; padding: 0;">Ficha & Pre-Consulta 360 — {{ p.nombre }}</h3>
                     <div style="display: flex; gap: 10px;">
-                        <button type="button" class="btn" style="background: #25d366; color: white; padding: 6px 12px; font-size: 11px;" onclick="enviarWhatsAppPreConsulta('{{ p.token_portal }}', '{{ p.nombre }}')">💬 Enviar Link de Pre-Consulta</button>
+                        <button type="button" class="btn" style="background: #25d366; color: white; padding: 6px 12px; font-size: 11px;" onclick="enviarWhatsAppPreConsulta('{{ p.token_portal }}', '{{ p.nombre }}', '{{ p.telefono or pre_data.get('telefono', '') }}')">💬 Enviar Link de Pre-Consulta</button>
                         <button type="button" class="btn" style="background: #25d366; color: white; padding: 6px 12px; font-size: 11px;" onclick="enviarWhatsAppWearable('{{ p.token_portal }}', '{{ p.nombre }}')">⌚ Reenviar Link Wearables</button>
                     </div>
                 </div>
@@ -362,7 +370,7 @@
                             <p class="ficha-row"><b>Nacimiento / Género:</b> {{ pre_data.get('fecha_nacimiento', 'N/A') }} — {{ pre_data.get('genero', 'N/A') }}</p>
                             <p class="ficha-row"><b>Residencia:</b> {{ pre_data.get('residencia', 'N/A') }}</p>
                             <p class="ficha-row"><b>Profesión:</b> {{ pre_data.get('profesion', 'N/A') }}</p>
-                            <p class="ficha-row"><b>Email:</b> {{ pre_data.get('correo', 'N/A') }} | <b>Tel:</b> {{ pre_data.get('telefono', 'N/A') }}</p>
+                            <p class="ficha-row"><b>Email:</b> {{ pre_data.get('correo', 'N/A') }} | <b>Tel:</b> {{ p.telefono or pre_data.get('telefono', 'N/A') }}</p>
                             <p class="ficha-row"><b>Contacto Emergencia:</b> {{ pre_data.get('contacto_emergencia', 'N/A') }}</p>
                         </div>
                         <div>
@@ -1106,10 +1114,17 @@
             localStorage.setItem('aeterna_theme', esClaro ? 'light' : 'dark');
         }
 
-        function enviarWhatsAppPreConsulta(tokenPortal, nombrePaciente) {
+        function enviarWhatsAppPreConsulta(tokenPortal, nombrePaciente, telefonoPaciente) {
             const urlPortal = window.location.origin + '/portal/pre-consulta/' + tokenPortal;
             const texto = `¡Hola ${nombrePaciente}! Te escribimos desde el Sanatorio Le Blanc (Instituto Aeterna). Por favor, completa tu formulario de pre-consulta 360° en el siguiente enlace seguro antes de tu cita: \n\n${urlPortal}`;
-            window.open(`https://wa.me/?text=` + encodeURIComponent(texto), '_blank');
+            let digitos = (telefonoPaciente || '').replace(/\D/g, '');
+            if (digitos.startsWith('0')) {
+                digitos = '595' + digitos.slice(1);
+            } else if (digitos.length === 9 && digitos.startsWith('9')) {
+                digitos = '595' + digitos;
+            }
+            const baseWa = digitos ? `https://wa.me/${digitos}?text=` : `https://wa.me/?text=`;
+            window.open(baseWa + encodeURIComponent(texto), '_blank');
         }
 
         function enviarWhatsAppWearable(tokenPortal, nombrePaciente) {
@@ -1314,3 +1329,4 @@
     </script>
 </body>
 </html>
+
