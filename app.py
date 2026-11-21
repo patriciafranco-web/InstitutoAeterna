@@ -121,7 +121,7 @@ class PacienteModel(db.Model):
     telefono = db.Column(db.String(40), default="")
     programa = db.Column(db.String(150), default="General")
     medico = db.Column(db.String(150), nullable=False)
-    entrenador = db.Column(db.String(150), default="Manuel Duarte")
+    entrenador = db.Column(db.String(150), default="Manuel Ruiz")
     reg_profesional = db.Column(db.String(50), default="MP 4291")
     fecha_turno = db.Column(db.String(20), default="")
     hora_turno = db.Column(db.String(50), default="09:00")
@@ -379,8 +379,8 @@ USUARIOS_DB = {
         "pass_hash": generate_password_hash("aeterna2026"), "nombre": "Dr. Alfredo Estigarribia", "rol_base": "medico", "es_socio": False,
         "especialidad": "Odontología del Sueño"
     },
-    "manuel.duarte": {
-        "pass_hash": generate_password_hash("aeterna2026"), "nombre": "Manuel Ruiz Vetun", "rol_base": "entrenador", "es_socio": False,
+    "manuel.ruiz": {
+        "pass_hash": generate_password_hash("aeterna2026"), "nombre": "Manuel Ruiz", "rol_base": "entrenador", "es_socio": False,
         "especialidad": "Preparador Físico / Performance Coach"
     },
     "nadia.bortolace": {
@@ -1476,7 +1476,7 @@ def editar_paciente_admision(turno_id):
                 <div class="form-group">
                     <label>Médico Tratante / Especialista</label>
                     <select name="medico">
-                        {% for doc in ['Dr. Pedro Calabrese', 'Dra. Fátima López', 'Dra. Romina Espinola', 'Lic. Ximena Ruiz', 'Lic. Belén Romero', 'Dr. Alfredo Estigarribia', 'Manuel Ruiz Vetun'] %}
+                        {% for doc in ['Dr. Pedro Calabrese', 'Dra. Fátima López', 'Dra. Romina Espinola', 'Lic. Ximena Ruiz', 'Lic. Belén Romero', 'Dr. Alfredo Estigarribia', 'Manuel Ruiz'] %}
                         <option value="{{ doc }}" {% if t.medico == doc %}selected{% endif %}>{{ doc }}</option>
                         {% endfor %}
                     </select>
@@ -2788,3 +2788,4 @@ if __name__ == '__main__':
     valido, mensaje = validar_certificado_pfx()
     print(f"Estado Sifen: {mensaje}")
     app.run(host='0.0.0.0', debug=True, port=5000)
+
