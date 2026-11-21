@@ -45,7 +45,12 @@
         .badge-bordo { background: rgba(128, 0, 32, 0.08); color: var(--accent); border: 1px solid rgba(128, 0, 32, 0.2); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
         .texto-bordo { color: var(--accent); font-weight: bold; font-size: 11.5px; }
         .texto-verde { color: var(--success); font-weight: bold; font-size: 11.5px; }
+        .texto-alerta { color: var(--warning); font-weight: bold; font-size: 11.5px; }
+        .texto-critico { color: #dc2626; font-weight: bold; font-size: 11.5px; }
         .caja-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 25px; }
+        .filtros-agenda { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; background: var(--bg-main); padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
+        .filtro-chip { background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+        .filtro-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
         @media (max-width: 900px) {
             .caja-stats-grid { grid-template-columns: 1fr; }
         }
@@ -133,33 +138,58 @@
         <div class="container">
         {% if seccion == 'agenda_admision' %}
             <div class="box">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px;">
                     <h3 style="margin: 0; border: none; padding: 0; color: var(--accent);">Agenda y Enlaces de Pre-Consulta (Admisión)</h3>
                     <a href="/?token={{ token }}&rol={{ rol }}&seccion=nuevo_paciente" class="btn" style="width: auto; text-decoration: none;">Agendar Nuevo Paciente</a>
                 </div>
-                
+
                 {% if agenda_items %}
-                <table>
-                    <tr><th>Fecha y Hora</th><th>Paciente</th><th>Teléfono</th><th>Edad</th><th>Programa</th><th>Médico Asignado</th><th style="text-align: center;">Acciones & Preconsulta</th></tr>
+                <div class="filtros-agenda">
+                    <input type="text" id="filtro-busqueda" class="form-control" placeholder="🔍 Buscar por paciente o teléfono..." oninput="aplicarFiltrosAgenda()" style="max-width: 240px; padding: 7px 10px; font-size: 12px;">
+                    <select id="filtro-medico" class="form-control" onchange="aplicarFiltrosAgenda()" style="max-width: 210px; padding: 7px 10px; font-size: 12px;">
+                        <option value="">Todos los profesionales</option>
+                        {% for doc in ['Dr. Pedro Calabrese', 'Dra. Fátima López', 'Dra. Romina Espinola', 'Lic. Ximena Ruiz', 'Lic. Belén Romero', 'Dr. Alfredo Estigarribia', 'Manuel Ruiz Vetun'] %}
+                        <option value="{{ doc }}">{{ doc }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="filtro-chip active" id="chip-todos" onclick="setFiltroFecha('todos')">Todos</button>
+                    <button type="button" class="filtro-chip" id="chip-hoy" onclick="setFiltroFecha('hoy')">Hoy</button>
+                    <button type="button" class="filtro-chip" id="chip-proximos" onclick="setFiltroFecha('proximos')">Próximas fechas</button>
+                </div>
+
+                <table id="tabla-agenda-admision">
+                    <tr><th>Fecha y Hora</th><th>Paciente</th><th>Teléfono (Rápido)</th><th>Estado</th><th>Médico Asignado</th><th style="text-align: center;">Acciones</th></tr>
                     {% for pat in agenda_items %}
-                    <tr>
+                    <tr class="fila-turno" data-fecha="{{ pat.fecha_turno or '' }}" data-medico="{{ pat.medico or '' }}" data-texto="{{ (pat.nombre ~ ' ' ~ (pat.telefono or ''))|lower }}">
                         <td>
                             {% if pat.fecha_turno %}
                                 <div style="font-size: 11px; color: var(--text-secondary);">{{ pat.fecha_turno }}</div>
                             {% endif %}
                             <b>{{ pat.hora_turno }}</b>
+                            <div style="font-size: 11px; color: var(--text-secondary);">{{ pat.edad }} años · {{ pat.programa }}</div>
                         </td>
-                        <td>{{ pat.nombre }}</td>
-                        <td>{{ pat.telefono or '—' }}</td>
-                        <td>{{ pat.edad }} años</td>
-                        <td>{{ pat.programa }}</td>
+                        <td><b>{{ pat.nombre }}</b></td>
+                        <td>
+                            <div style="display: flex; gap: 4px; align-items: center;">
+                                <input type="text" id="tel_rapido_{{ pat.turno_id }}" class="form-control" value="{{ pat.telefono or '' }}" placeholder="Teléfono" style="padding: 5px 7px; font-size: 11.5px; width: 118px;">
+                                <button type="button" class="btn" onclick="guardarTelefonoRapido({{ pat.turno_id }})" title="Guardar teléfono" style="padding: 5px 8px; font-size: 11px; background: var(--success);">💾</button>
+                            </div>
+                        </td>
+                        <td>
+                            <select class="form-control" onchange="cambiarEstadoTurno({{ pat.turno_id }}, this.value)" style="padding: 5px 7px; font-size: 11.5px; width: 155px;">
+                                {% for est_opt in ['Confirmado / Sala VIP', 'En sala de espera', 'Atendido', 'Reprogramado', 'Cancelado'] %}
+                                <option value="{{ est_opt }}" {% if (pat.estado_turno or 'Confirmado / Sala VIP') == est_opt %}selected{% endif %}>{{ est_opt }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
                         <td>{{ pat.medico }}</td>
-                        <td style="text-align: center; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
-                            <button class="btn" onclick="enviarWhatsAppPreConsulta('{{ pat.token_portal }}', '{{ pat.nombre }}', '{{ pat.telefono or '' }}')" style="padding: 6px 10px; font-size: 11px; width: auto; background: #25d366; color: #fff;">💬 Enviar Link 360</button>
-                            <a href="/recepcion/imprimir-preconsulta/{{ pat.id }}?token={{ token }}" target="_blank" class="btn" style="background: var(--accent); color: white; padding: 6px 10px; font-size: 11px; text-decoration: none; width: auto;">🖨️ Preconsulta</a>
-                            <a href="/recepcion/editar-paciente/{{ pat.turno_id }}?token={{ token }}" class="btn" style="background: #374151; color: white; padding: 6px 10px; font-size: 11px; text-decoration: none; width: auto;">✏️ Editar</a>
+                        <td style="text-align: center; display: flex; gap: 5px; justify-content: center; flex-wrap: wrap;">
+                            <button type="button" class="btn" onclick="enviarWhatsAppPreConsulta('{{ pat.token_portal }}', '{{ pat.nombre }}', document.getElementById('tel_rapido_{{ pat.turno_id }}').value)" style="padding: 6px 9px; font-size: 10.5px; width: auto; background: #25d366; color: #fff;">💬 Link 360</button>
+                            <button type="button" class="btn" onclick="enviarRecordatorioCita('{{ pat.nombre }}', document.getElementById('tel_rapido_{{ pat.turno_id }}').value, '{{ pat.fecha_turno or '' }}', '{{ pat.hora_turno }}', '{{ pat.medico }}', '{{ pat.token_portal }}')" style="padding: 6px 9px; font-size: 10.5px; width: auto; background: #0284c7; color: #fff;">🔔 Recordar</button>
+                            <a href="/recepcion/imprimir-preconsulta/{{ pat.id }}?token={{ token }}" target="_blank" class="btn" style="background: var(--accent); color: white; padding: 6px 9px; font-size: 10.5px; text-decoration: none; width: auto;">🖨️</a>
+                            <a href="/recepcion/editar-paciente/{{ pat.turno_id }}?token={{ token }}" class="btn" style="background: #374151; color: white; padding: 6px 9px; font-size: 10.5px; text-decoration: none; width: auto;">✏️</a>
                             <form action="/api/admision/eliminar-paciente/{{ pat.turno_id }}?token={{ token }}" method="POST" style="margin: 0;" onsubmit="return confirm('¿Desea eliminar este turno de la agenda?');">
-                                <button type="submit" class="btn" style="background: #dc2626; color: white; padding: 6px 10px; font-size: 11px; width: auto;">🗑️</button>
+                                <button type="submit" class="btn" style="background: #dc2626; color: white; padding: 6px 9px; font-size: 10.5px; width: auto;">🗑️</button>
                             </form>
                         </td>
                     </tr>
@@ -316,7 +346,7 @@
                 <h3>Mi Agenda de Turnos — {{ nombre_usuario }}</h3>
                 {% if agenda_items %}
                 <table>
-                    <tr><th>Fecha y Hora</th><th>Paciente</th><th>Edad</th><th>Programa</th><th>Acción</th></tr>
+                    <tr><th>Fecha y Hora</th><th>Paciente</th><th>Estado</th><th>Programa</th><th>Acción</th></tr>
                     {% for pat in agenda_items %}
                     <tr>
                         <td>
@@ -325,8 +355,8 @@
                             {% endif %}
                             <b>{{ pat.hora_turno }}</b>
                         </td>
-                        <td>{{ pat.nombre }}</td>
-                        <td>{{ pat.edad }} años</td>
+                        <td>{{ pat.nombre }} ({{ pat.edad }} años)</td>
+                        <td><span class="badge-bordo">{{ pat.estado_turno or 'Confirmado / Sala VIP' }}</span></td>
                         <td>{{ pat.programa }}</td>
                         <td>
                             <a href="/?token={{ token }}&rol=medico&seccion=paciente&id={{ pat.id }}" class="btn" style="padding: 6px 12px; font-size: 11px;">Atender Paciente</a>
@@ -392,6 +422,25 @@
                             <p class="ficha-row"><b>Laboratorios Aportados:</b> {{ pre_data.get('lab_recientes', 'N/A') }}</p>
                         </div>
                     </div>
+                </div>
+
+                <div class="ficha-card">
+                    <div class="ficha-card-title">Historial de Turnos del Paciente</div>
+                    {% if turnos_paciente %}
+                    <table style="margin-top: 4px;">
+                        <tr><th>Fecha</th><th>Hora</th><th>Profesional</th><th>Estado</th></tr>
+                        {% for trn in turnos_paciente %}
+                        <tr>
+                            <td>{{ trn.fecha_turno or 'Sin fecha' }}</td>
+                            <td><b>{{ trn.hora_turno }}</b></td>
+                            <td>{{ trn.medico }}</td>
+                            <td><span class="badge-bordo">{{ trn.estado_turno or 'Confirmado / Sala VIP' }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                    {% else %}
+                    <p class="ficha-row" style="color: var(--text-secondary); margin: 0;">Sin turnos registrados en el historial.</p>
+                    {% endif %}
                 </div>
 
                 <div style="margin-bottom: 25px; background: var(--bg-main); padding: 16px; border-radius: 8px; border: 1px solid var(--border); max-width: 50%;">
@@ -821,13 +870,13 @@
                                 </svg>
                             </div>
 
-                            <table>
-                                <tr><th>Fecha</th><th>Valor</th><th>Estado</th></tr>
+                            <table class="tabla-biomarcador">
+                                <tr><th>Fecha</th><th>Valor</th><th>Alerta / Rango</th></tr>
                                 {% for b in lista_bios %}
-                                <tr>
+                                <tr class="fila-bio" data-parametro="{{ parametro }}" data-valor="{{ b.valor }}">
                                     <td>{{ b.fecha }}</td>
                                     <td><b>{{ b.valor }}</b> {{ b.unidad }}</td>
-                                    <td style="color: var(--success);">Registrado</td>
+                                    <td class="celda-alerta-bio"><span class="texto-verde">Registrado</span></td>
                                 </tr>
                                 {% endfor %}
                             </table>
@@ -1104,9 +1153,161 @@
 
     <!-- SCRIPT DE CONTROL UNIFICADO -->
     <script>
+        let filtroFechaActual = 'todos';
+
         function ajustarAltura(el) {
             el.style.height = 'auto';
             el.style.height = (el.scrollHeight) + 'px';
+        }
+
+        function obtenerFechaHoyStr() {
+            const ahora = new Date();
+            const d = String(ahora.getDate()).padStart(2, '0');
+            const m = String(ahora.getMonth() + 1).padStart(2, '0');
+            const y = ahora.getFullYear();
+            return `${d}/${m}/${y}`;
+        }
+
+        function parsearFechaDDMMYYYY(strFecha) {
+            if (!strFecha || !/^\d{2}\/\d{2}\/\d{4}$/.test(strFecha.trim())) return null;
+            const [d, m, y] = strFecha.trim().split('/').map(Number);
+            return new Date(y, m - 1, d);
+        }
+
+        function setFiltroFecha(tipo) {
+            filtroFechaActual = tipo;
+            ['todos', 'hoy', 'proximos'].forEach(k => {
+                const el = document.getElementById('chip-' + k);
+                if (el) el.classList.toggle('active', k === tipo);
+            });
+            aplicarFiltrosAgenda();
+        }
+
+        function aplicarFiltrosAgenda() {
+            const filas = document.querySelectorAll('#tabla-agenda-admision .fila-turno');
+            if (!filas.length) return;
+            const q = (document.getElementById('filtro-busqueda')?.value || '').trim().toLowerCase();
+            const med = (document.getElementById('filtro-medico')?.value || '').trim();
+            const hoyDate = parsearFechaDDMMYYYY(obtenerFechaHoyStr());
+
+            filas.forEach(tr => {
+                const texto = tr.getAttribute('data-texto') || '';
+                const medico = tr.getAttribute('data-medico') || '';
+                const fechaStr = tr.getAttribute('data-fecha') || '';
+                const fDate = parsearFechaDDMMYYYY(fechaStr);
+
+                let visible = true;
+                if (q && !texto.includes(q)) visible = false;
+                if (med && medico !== med) visible = false;
+
+                if (visible && filtroFechaActual !== 'todos') {
+                    if (!fDate || !hoyDate) {
+                        visible = false;
+                    } else if (filtroFechaActual === 'hoy') {
+                        visible = fDate.getTime() === hoyDate.getTime();
+                    } else if (filtroFechaActual === 'proximos') {
+                        visible = fDate.getTime() > hoyDate.getTime();
+                    }
+                }
+                tr.style.display = visible ? '' : 'none';
+            });
+        }
+
+        function normalizarTelefonoWA(telefonoPaciente) {
+            let digitos = (telefonoPaciente || '').replace(/\D/g, '');
+            if (digitos.startsWith('0')) {
+                digitos = '595' + digitos.slice(1);
+            } else if (digitos.length === 9 && digitos.startsWith('9')) {
+                digitos = '595' + digitos;
+            }
+            return digitos;
+        }
+
+        function enviarWhatsAppPreConsulta(tokenPortal, nombrePaciente, telefonoPaciente) {
+            const urlPortal = window.location.origin + '/portal/pre-consulta/' + tokenPortal;
+            const texto = `¡Hola ${nombrePaciente}! Te escribimos desde el Sanatorio Le Blanc (Instituto Aeterna). Por favor, completa tu formulario de pre-consulta 360° en el siguiente enlace seguro antes de tu cita: \n\n${urlPortal}`;
+            const digitos = normalizarTelefonoWA(telefonoPaciente);
+            const baseWa = digitos ? `https://wa.me/${digitos}?text=` : `https://wa.me/?text=`;
+            window.open(baseWa + encodeURIComponent(texto), '_blank');
+        }
+
+        function enviarRecordatorioCita(nombrePaciente, telefonoPaciente, fechaTurno, horaTurno, medico, tokenPortal) {
+            const urlPortal = window.location.origin + '/portal/pre-consulta/' + tokenPortal;
+            const fechaTexto = fechaTurno ? `${fechaTurno} a las ${horaTurno}` : horaTurno;
+            const texto = `¡Hola ${nombrePaciente}! Le recordamos su turno en el Sanatorio Le Blanc (Instituto Aeterna) con ${medico} el ${fechaTexto}. Si aún no completó su pre-consulta 360°, puede hacerlo aquí: ${urlPortal}`;
+            const digitos = normalizarTelefonoWA(telefonoPaciente);
+            const baseWa = digitos ? `https://wa.me/${digitos}?text=` : `https://wa.me/?text=`;
+            window.open(baseWa + encodeURIComponent(texto), '_blank');
+        }
+
+        function cambiarEstadoTurno(turnoId, nuevoEstado) {
+            fetch('/api/admision/actualizar-turno-rapido?token={{ token }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ turno_id: turnoId, estado_turno: nuevoEstado })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    alert('❌ ' + (data.mensaje || 'No se pudo actualizar el estado.'));
+                }
+            })
+            .catch(() => alert('❌ Error de red al actualizar estado.'));
+        }
+
+        function guardarTelefonoRapido(turnoId) {
+            const input = document.getElementById('tel_rapido_' + turnoId);
+            if (!input) return;
+            const tel = input.value.trim();
+
+            fetch('/api/admision/actualizar-turno-rapido?token={{ token }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ turno_id: turnoId, telefono: tel })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('✅ Teléfono guardado.');
+                } else {
+                    alert('❌ ' + (data.mensaje || 'No se pudo guardar el teléfono.'));
+                }
+            })
+            .catch(() => alert('❌ Error de red al guardar teléfono.'));
+        }
+
+        function evaluarRangosBiomarcadores() {
+            const rangos = [
+                { keys: ['glucemia'], min: 70, max: 90, label: 'Óptimo (70–90)' },
+                { keys: ['hba1c', 'glicosilada'], min: 4.5, max: 5.4, label: 'Óptimo (4.5–5.4)' },
+                { keys: ['vitamina d', '25-oh'], min: 40, max: 70, label: 'Óptimo (40–70)' },
+                { keys: ['ferritina'], min: 50, max: 150, label: 'Óptimo (50–150)' },
+                { keys: ['triglicéridos', 'trigliceridos'], min: 0, max: 100, label: 'Óptimo (<100)' },
+                { keys: ['ldl'], min: 0, max: 100, label: 'Óptimo (<100)' },
+                { keys: ['hdl'], min: 50, max: 999, label: 'Óptimo (>50)' },
+                { keys: ['colesterol total'], min: 0, max: 200, label: 'Óptimo (<200)' }
+            ];
+
+            document.querySelectorAll('.fila-bio').forEach(tr => {
+                const param = (tr.getAttribute('data-parametro') || '').toLowerCase();
+                const val = parseFloat(tr.getAttribute('data-valor'));
+                const celda = tr.querySelector('.celda-alerta-bio');
+                if (!celda || isNaN(val)) return;
+
+                const regla = rangos.find(r => r.keys.some(k => param.includes(k)));
+                if (!regla) {
+                    celda.innerHTML = '<span class="texto-verde">Registrado</span>';
+                    return;
+                }
+
+                if (val >= regla.min && val <= regla.max) {
+                    celda.innerHTML = `<span class="texto-verde">✅ ${regla.label}</span>`;
+                } else if (val < regla.min) {
+                    celda.innerHTML = `<span class="texto-alerta">⚠️ Bajo (${regla.label})</span>`;
+                } else {
+                    celda.innerHTML = `<span class="texto-critico">🚨 Alto (${regla.label})</span>`;
+                }
+            });
         }
 
         document.addEventListener("DOMContentLoaded", function() {
@@ -1116,25 +1317,13 @@
             if (localStorage.getItem('aeterna_theme') === 'light') { 
                 document.body.classList.add('light-mode'); 
             }
+            evaluarRangosBiomarcadores();
         });
 
         function toggleTheme() {
             document.body.classList.toggle('light-mode');
             const esClaro = document.body.classList.contains('light-mode');
             localStorage.setItem('aeterna_theme', esClaro ? 'light' : 'dark');
-        }
-
-        function enviarWhatsAppPreConsulta(tokenPortal, nombrePaciente, telefonoPaciente) {
-            const urlPortal = window.location.origin + '/portal/pre-consulta/' + tokenPortal;
-            const texto = `¡Hola ${nombrePaciente}! Te escribimos desde el Sanatorio Le Blanc (Instituto Aeterna). Por favor, completa tu formulario de pre-consulta 360° en el siguiente enlace seguro antes de tu cita: \n\n${urlPortal}`;
-            let digitos = (telefonoPaciente || '').replace(/\D/g, '');
-            if (digitos.startsWith('0')) {
-                digitos = '595' + digitos.slice(1);
-            } else if (digitos.length === 9 && digitos.startsWith('9')) {
-                digitos = '595' + digitos;
-            }
-            const baseWa = digitos ? `https://wa.me/${digitos}?text=` : `https://wa.me/?text=`;
-            window.open(baseWa + encodeURIComponent(texto), '_blank');
         }
 
         function enviarWhatsAppWearable(tokenPortal, nombrePaciente) {
