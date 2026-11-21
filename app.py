@@ -910,7 +910,8 @@ def index():
             "programa": t.programa or (pac_ref.programa if pac_ref else "General"),
             "medico": t.medico,
             "fecha_turno": t.fecha_turno or (pac_ref.fecha_turno if pac_ref else ""),
-            "hora_turno": t.hora_turno
+            "hora_turno": t.hora_turno,
+            "estado_turno": t.estado_turno or (pac_ref.estado_turno if pac_ref else "Confirmado / Sala VIP")
         })
 
     paciente_actual = None
@@ -918,6 +919,14 @@ def index():
         paciente_actual = PacienteModel.query.filter_by(id=id_paciente).first()
     elif pacientes_db:
         paciente_actual = pacientes_db[0]
+
+    turnos_paciente = (
+        TurnoModel.query.filter_by(id_paciente=paciente_actual.id)
+        .order_by(TurnoModel.id.desc())
+        .all()
+        if paciente_actual
+        else []
+    )
 
     pre_consulta_dict = {}
     if paciente_actual and paciente_actual.pre_consulta_json:
@@ -971,6 +980,7 @@ def index():
         pre_data=pre_consulta_dict,
         pacientes=pacientes_db,
         agenda_items=agenda_items,
+        turnos_paciente=turnos_paciente,
         pagos=pagos_db,
         total_recaudado=total_recaudado,
         total_recaudado_hoy=total_recaudado_hoy,
@@ -1318,6 +1328,36 @@ def agendar_paciente():
     db.session.commit()
     
     return redirect(url_for('index', token=token, rol='recepcion', seccion='agenda_admision'))
+
+@app.route('/api/admision/actualizar-turno-rapido', methods=['POST'])
+def actualizar_turno_rapido():
+    token, resp_error = verificar_sesion_y_rol(('recepcion', 'admision', 'secretaria'))
+    if not token:
+        return jsonify({"status": "error", "mensaje": "No autorizado."}), 403
+
+    data = request.get_json(silent=True) or request.form or {}
+    turno_id = data.get('turno_id')
+    nuevo_estado = (data.get('estado_turno') or '').strip()
+    nuevo_tel = (data.get('telefono') or '').strip()
+
+    t = TurnoModel.query.get(turno_id)
+    if not t:
+        return jsonify({"status": "error", "mensaje": "Turno no encontrado."}), 404
+
+    if nuevo_estado:
+        t.estado_turno = nuevo_estado
+    if 'telefono' in data:
+        t.telefono = nuevo_tel
+
+    pac = PacienteModel.query.filter_by(id=t.id_paciente).first()
+    if pac:
+        if nuevo_estado:
+            pac.estado_turno = nuevo_estado
+        if 'telefono' in data and nuevo_tel:
+            pac.telefono = nuevo_tel
+
+    db.session.commit()
+    return jsonify({"status": "success", "mensaje": "Turno actualizado."})
 
 @app.route('/recepcion/editar-paciente/<int:turno_id>', methods=['GET', 'POST'])
 def editar_paciente_admision(turno_id):
