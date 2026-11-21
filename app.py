@@ -77,6 +77,22 @@ def formatear_fecha_turno(valor):
         return f"{partes[2]}/{partes[1]}/{partes[0]}"
     return texto
 
+def fecha_a_iso(valor):
+    texto = (valor or '').strip()
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', texto):
+        return texto
+    if re.match(r'^\d{2}/\d{2}/\d{4}$', texto):
+        d, m, y = texto.split('/')
+        return f"{y}-{m}-{d}"
+    return ""
+
+def normalizar_hora_turno(valor):
+    texto = (valor or '').strip()
+    match = re.match(r'^(\d{1,2})\s*[:\s]\s*(\d{2})', texto)
+    if match:
+        return f"{int(match.group(1)):02d}:{match.group(2)}"
+    return texto or "09:00"
+
 # 1. CONEXIÓN A ANTHROPIC
 client = anthropic.Anthropic()
 
@@ -299,7 +315,7 @@ with app.app_context():
                     programa=pac.programa or "General",
                     medico=pac.medico,
                     fecha_turno=pac.fecha_turno or "",
-                    hora_turno=pac.hora_turno or "09:00",
+                    hora_turno=normalizar_hora_turno(pac.hora_turno),
                     estado_turno=estado_mig
                 ))
             db.session.commit()
@@ -879,6 +895,7 @@ def index():
         seccion = request.args.get('seccion', 'agenda_medico' if rol == 'medico' else 'caja')
         
     id_paciente = request.args.get('id')
+    turno_activo_id = request.args.get('turno_id', type=int)
     
     if rol == 'medico':
         nombre_limpio = nombre_usuario.replace('Dra.', '').replace('Dr.', '').replace('Lic.', '').split('(')[0].strip()
@@ -913,7 +930,7 @@ def index():
             "programa": t.programa or (pac_ref.programa if pac_ref else "General"),
             "medico": t.medico,
             "fecha_turno": t.fecha_turno or (pac_ref.fecha_turno if pac_ref else ""),
-            "hora_turno": t.hora_turno,
+            "hora_turno": normalizar_hora_turno(t.hora_turno),
             "estado_turno": estado_limpio
         })
 
@@ -980,6 +997,7 @@ def index():
         nombre_usuario=nombre_usuario,
         seccion=seccion, 
         p=paciente_actual, 
+        turno_activo_id=turno_activo_id,
         pre_data=pre_consulta_dict,
         pacientes=pacientes_db,
         agenda_items=agenda_items,
@@ -1035,7 +1053,7 @@ def atender_paciente_turno(id_paciente):
         pac.estado_turno = "Atendido"
 
     db.session.commit()
-    return redirect(url_for('index', token=token, rol='medico', seccion='paciente', id=id_paciente))
+    return redirect(url_for('index', token=token, rol='medico', seccion='paciente', id=id_paciente, turno_id=turno_id))
 
 # ==========================================
 # REQUERIMIENTO 01: VISTA PRECONSULTA PARA SECRETARÍA (CON OPCIÓN DE IMPRESIÓN Y EDICIÓN)
@@ -1302,26 +1320,26 @@ def agendar_paciente():
     if not token:
         return resp_error
     nombre = request.form.get('nombre', '').strip()
-    edad = int(request.form.get('edad', 30))
+    try:
+        edad = int(request.form.get('edad', 30))
+    except (TypeError, ValueError):
+        edad = 30
     telefono = request.form.get('telefono', '').strip()
     fecha_turno = formatear_fecha_turno(request.form.get('fecha_turno', ''))
-    medico = request.form.get('medico', 'Dr. Pedro Calabrese')
-    hora_turno = request.form.get('hora_turno', '09:00')
+    medico = request.form.get('medico', 'Dr. Pedro Calabrese').strip()
+    hora_turno = normalizar_hora_turno(request.form.get('hora_turno', '09:00'))
     
     paciente_existente = PacienteModel.query.filter(PacienteModel.nombre.ilike(nombre)).first()
     
     if paciente_existente:
-        if telefono:
+        if telefono and not paciente_existente.telefono:
             paciente_existente.telefono = telefono
-        if fecha_turno:
+        if not paciente_existente.fecha_turno and fecha_turno:
             paciente_existente.fecha_turno = fecha_turno
-        paciente_existente.hora_turno = hora_turno
-        paciente_existente.medico = medico
-        paciente_existente.estado_turno = "Confirmado"
         pac_id = paciente_existente.id
         pac_token = paciente_existente.token_portal
         pac_edad = paciente_existente.edad
-        pac_tel = paciente_existente.telefono or ""
+        pac_tel = telefono or (paciente_existente.telefono or "")
         pac_prog = paciente_existente.programa or "General"
     else:
         pac_id = f"p_{random.randint(1000, 9999)}"
@@ -1348,7 +1366,7 @@ def agendar_paciente():
         token_portal=pac_token,
         nombre_paciente=nombre,
         edad=pac_edad,
-        telefono=telefono or pac_tel,
+        telefono=pac_tel,
         programa=pac_prog,
         medico=medico,
         fecha_turno=fecha_turno,
@@ -1377,10 +1395,6 @@ def actualizar_turno_rapido():
     if nuevo_estado:
         t.estado_turno = nuevo_estado
 
-    pac = PacienteModel.query.filter_by(id=t.id_paciente).first()
-    if pac and nuevo_estado:
-        pac.estado_turno = nuevo_estado
-
     db.session.commit()
     return jsonify({"status": "success", "estado_turno": t.estado_turno, "mensaje": "Estado actualizado."})
 
@@ -1404,7 +1418,7 @@ def editar_paciente_admision(turno_id):
             nueva_edad = t.edad
         nuevo_tel = request.form.get('telefono', '').strip()
         nueva_fecha = formatear_fecha_turno(request.form.get('fecha_turno', t.fecha_turno or ''))
-        nueva_hora = request.form.get('hora_turno', t.hora_turno).strip()
+        nueva_hora = normalizar_hora_turno(request.form.get('hora_turno', t.hora_turno))
         nuevo_prog = request.form.get('programa', t.programa).strip() or "General"
         nuevo_med = request.form.get('medico', t.medico).strip()
 
@@ -1421,11 +1435,7 @@ def editar_paciente_admision(turno_id):
             p.edad = nueva_edad
             if nuevo_tel:
                 p.telefono = nuevo_tel
-            if nueva_fecha:
-                p.fecha_turno = nueva_fecha
-            p.hora_turno = nueva_hora
             p.programa = nuevo_prog
-            p.medico = nuevo_med
 
         db.session.commit()
         rol_actual = session.get(f'rol_base_{token}', 'recepcion')
@@ -1438,33 +1448,33 @@ def editar_paciente_admision(turno_id):
         <meta charset="UTF-8">
         <title>Editar Turno — Instituto Aeterna</title>
         <style>
-            body { font-family: 'Inter', system-ui, sans-serif; background: #f4f6f9; color: #121110; padding: 30px; }
-            .box { max-width: 620px; margin: 0 auto; background: #fff; padding: 32px; border-radius: 8px; border-top: 5px solid #800020; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-            h2 { color: #800020; margin-top: 0; font-size: 17px; text-transform: uppercase; }
+            body { font-family: 'Inter', system-ui, sans-serif; background: #f4f6f9; color: #18181b; padding: 30px; }
+            .box { max-width: 640px; margin: 0 auto; background: #fff; padding: 32px; border-radius: 10px; border-top: 4px solid #800020; border: 1px solid #e4e4e7; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
+            h2 { color: #800020; margin-top: 0; font-size: 16px; text-transform: uppercase; }
             .form-group { margin-bottom: 15px; }
-            label { display: block; font-size: 11.5px; font-weight: bold; color: #444; text-transform: uppercase; margin-bottom: 5px; }
-            input, select { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; font-size: 13px; }
+            label { display: block; font-size: 11px; font-weight: 600; color: #52525b; text-transform: uppercase; margin-bottom: 5px; }
+            input, select { width: 100%; padding: 10px 12px; border: 1px solid #d4d4d8; border-radius: 6px; box-sizing: border-box; font-size: 13px; background: #fafafa; }
             .acciones { display: flex; gap: 10px; margin-top: 22px; }
-            .btn { background: #800020; color: #fff; border: none; padding: 11px 18px; border-radius: 6px; font-weight: bold; font-size: 12px; text-transform: uppercase; cursor: pointer; text-decoration: none; }
-            .btn-sec { background: #e5e7eb; color: #121110; }
+            .btn { background: #800020; color: #fff; border: none; padding: 11px 18px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; text-decoration: none; }
+            .btn-sec { background: #f4f4f5; color: #18181b; border: 1px solid #e4e4e7; }
         </style>
     </head>
     <body>
         <div class="box">
             <h2>Editar Turno y Datos de Contacto</h2>
             <form method="POST">
-                <div class="form-group"><label>Nombre y Apellido:</label><input type="text" name="nombre" value="{{ t.nombre_paciente }}" required></div>
+                <div class="form-group"><label>Nombre y Apellido</label><input type="text" name="nombre" value="{{ t.nombre_paciente }}" required></div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group"><label>Edad:</label><input type="number" name="edad" value="{{ t.edad }}" required></div>
-                    <div class="form-group"><label>Teléfono (WhatsApp):</label><input type="text" name="telefono" value="{{ t.telefono or '' }}" placeholder="Ej. 0981123456 o 595981123456"></div>
+                    <div class="form-group"><label>Edad</label><input type="number" name="edad" value="{{ t.edad }}" required></div>
+                    <div class="form-group"><label>Teléfono (WhatsApp)</label><input type="text" name="telefono" value="{{ t.telefono or '' }}" placeholder="Ej. 0981123456 o 595981123456"></div>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
-                    <div class="form-group"><label>Fecha del Turno:</label><input type="text" name="fecha_turno" value="{{ t.fecha_turno or '' }}" placeholder="DD/MM/AAAA"></div>
-                    <div class="form-group"><label>Hora del Turno:</label><input type="time" name="hora_turno" value="{{ t.hora_turno }}" required></div>
-                    <div class="form-group"><label>Programa:</label><input type="text" name="programa" value="{{ t.programa }}"></div>
+                    <div class="form-group"><label>Fecha del Turno</label><input type="date" name="fecha_turno" value="{{ fecha_iso }}"></div>
+                    <div class="form-group"><label>Hora del Turno</label><input type="time" name="hora_turno" value="{{ hora_limpia }}" required></div>
+                    <div class="form-group"><label>Programa</label><input type="text" name="programa" value="{{ t.programa }}"></div>
                 </div>
                 <div class="form-group">
-                    <label>Médico Tratante / Especialista:</label>
+                    <label>Médico Tratante / Especialista</label>
                     <select name="medico">
                         {% for doc in ['Dr. Pedro Calabrese', 'Dra. Fátima López', 'Dra. Romina Espinola', 'Lic. Ximena Ruiz', 'Lic. Belén Romero', 'Dr. Alfredo Estigarribia', 'Manuel Ruiz Vetun'] %}
                         <option value="{{ doc }}" {% if t.medico == doc %}selected{% endif %}>{{ doc }}</option>
@@ -1472,7 +1482,7 @@ def editar_paciente_admision(turno_id):
                     </select>
                 </div>
                 <div class="acciones">
-                    <button type="submit" class="btn">💾 Guardar Cambios</button>
+                    <button type="submit" class="btn">Guardar Cambios</button>
                     <a href="/?token={{ token }}&rol={{ rol }}&seccion=agenda_admision" class="btn btn-sec">Cancelar</a>
                 </div>
             </form>
@@ -1481,7 +1491,14 @@ def editar_paciente_admision(turno_id):
     </html>
     """
     rol_actual = session.get(f'rol_base_{token}', 'recepcion')
-    return render_template_string(html_editar, t=t, token=token, rol=rol_actual)
+    return render_template_string(
+        html_editar,
+        t=t,
+        fecha_iso=fecha_a_iso(t.fecha_turno),
+        hora_limpia=normalizar_hora_turno(t.hora_turno),
+        token=token,
+        rol=rol_actual
+    )
 
 @app.route('/api/admision/eliminar-paciente/<int:turno_id>', methods=['POST'])
 def eliminar_paciente_admision(turno_id):
