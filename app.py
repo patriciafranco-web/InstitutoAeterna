@@ -115,6 +115,20 @@ class PacienteModel(db.Model):
     pre_consulta_json = db.Column(db.Text, nullable=True)
     receta_texto = db.Column(db.Text, default="1. Protocolo inicial Aeterna.")
 
+class TurnoModel(db.Model):
+    __tablename__ = 'turnos'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    id_paciente = db.Column(db.String(50), nullable=False)
+    token_portal = db.Column(db.String(100), nullable=False)
+    nombre_paciente = db.Column(db.String(150), nullable=False)
+    edad = db.Column(db.Integer, nullable=False)
+    telefono = db.Column(db.String(40), default="")
+    programa = db.Column(db.String(150), default="General")
+    medico = db.Column(db.String(150), nullable=False)
+    fecha_turno = db.Column(db.String(20), default="")
+    hora_turno = db.Column(db.String(50), default="09:00 hs")
+    estado_turno = db.Column(db.String(50), default="Confirmado / Sala VIP")
+
 class ConsultaModel(db.Model):
     __tablename__ = 'consultas_historial'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -271,6 +285,26 @@ with app.app_context():
         except Exception as e:
             db.session.rollback()
             print("Migración omitida/aplicada:", sql, "->", e)
+
+    try:
+        if TurnoModel.query.count() == 0 and PacienteModel.query.count() > 0:
+            for pac in PacienteModel.query.all():
+                db.session.add(TurnoModel(
+                    id_paciente=pac.id,
+                    token_portal=pac.token_portal,
+                    nombre_paciente=pac.nombre,
+                    edad=pac.edad,
+                    telefono=pac.telefono or "",
+                    programa=pac.programa or "General",
+                    medico=pac.medico,
+                    fecha_turno=pac.fecha_turno or "",
+                    hora_turno=pac.hora_turno or "09:00 hs",
+                    estado_turno=pac.estado_turno or "Confirmado / Sala VIP"
+                ))
+            db.session.commit()
+    except Exception as mig_turno_err:
+        db.session.rollback()
+        print("Migración de turnos omitida/error:", mig_turno_err)
 
 # ==========================================
 # LABORATORIOS AETERNA
@@ -847,14 +881,37 @@ def index():
     
     if rol == 'medico':
         nombre_limpio = nombre_usuario.replace('Dra.', '').replace('Dr.', '').replace('Lic.', '').split('(')[0].strip()
-        pacientes_db = PacienteModel.query.filter(
+        turnos_filtrados = TurnoModel.query.filter(
+            TurnoModel.medico.ilike(f"%{nombre_limpio}%")
+        ).all()
+        pacientes_por_nombre = PacienteModel.query.filter(
             db.or_(
                 PacienteModel.medico.ilike(f"%{nombre_limpio}%"),
                 PacienteModel.entrenador.ilike(f"%{nombre_limpio}%")
             )
         ).all()
+        ids_visibles = {t.id_paciente for t in turnos_filtrados} | {p.id for p in pacientes_por_nombre}
+        pacientes_db = PacienteModel.query.filter(PacienteModel.id.in_(ids_visibles)).all() if ids_visibles else []
     else:
+        turnos_filtrados = TurnoModel.query.all()
         pacientes_db = PacienteModel.query.all()
+
+    mapa_pacientes = {pac.id: pac for pac in PacienteModel.query.all()}
+    agenda_items = []
+    for t in turnos_filtrados:
+        pac_ref = mapa_pacientes.get(t.id_paciente)
+        agenda_items.append({
+            "turno_id": t.id,
+            "id": t.id_paciente,
+            "token_portal": pac_ref.token_portal if pac_ref else t.token_portal,
+            "nombre": pac_ref.nombre if pac_ref else t.nombre_paciente,
+            "edad": pac_ref.edad if pac_ref else t.edad,
+            "telefono": t.telefono or (pac_ref.telefono if pac_ref else ""),
+            "programa": t.programa or (pac_ref.programa if pac_ref else "General"),
+            "medico": t.medico,
+            "fecha_turno": t.fecha_turno or (pac_ref.fecha_turno if pac_ref else ""),
+            "hora_turno": t.hora_turno
+        })
 
     paciente_actual = None
     if id_paciente:
@@ -913,6 +970,7 @@ def index():
         p=paciente_actual, 
         pre_data=pre_consulta_dict,
         pacientes=pacientes_db,
+        agenda_items=agenda_items,
         pagos=pagos_db,
         total_recaudado=total_recaudado,
         total_recaudado_hoy=total_recaudado_hoy,
@@ -1209,56 +1267,101 @@ def agendar_paciente():
     medico = request.form.get('medico', 'Dr. Pedro Calabrese')
     hora_turno = request.form.get('hora_turno', '09:00 hs')
     
-    paciente_existente = PacienteModel.query.filter_by(nombre=nombre).first()
+    paciente_existente = PacienteModel.query.filter(PacienteModel.nombre.ilike(nombre)).first()
     
     if paciente_existente:
-        paciente_existente.medico = medico
+        if telefono:
+            paciente_existente.telefono = telefono
         if fecha_turno:
             paciente_existente.fecha_turno = fecha_turno
         paciente_existente.hora_turno = hora_turno
-        if telefono:
-            paciente_existente.telefono = telefono
+        paciente_existente.medico = medico
         paciente_existente.estado_turno = "Confirmado / Sala VIP"
+        pac_id = paciente_existente.id
+        pac_token = paciente_existente.token_portal
+        pac_edad = paciente_existente.edad
+        pac_tel = paciente_existente.telefono or ""
+        pac_prog = paciente_existente.programa or "General"
     else:
-        nuevo_id = f"p_{random.randint(1000, 9999)}"
+        pac_id = f"p_{random.randint(1000, 9999)}"
+        pac_token = str(uuid.uuid4())
+        pac_edad = edad
+        pac_tel = telefono
+        pac_prog = "General"
         nuevo_paciente = PacienteModel(
-            id=nuevo_id,
+            id=pac_id,
+            token_portal=pac_token,
             nombre=nombre,
             edad=edad,
             telefono=telefono,
-            programa="General",
+            programa=pac_prog,
             medico=medico,
             fecha_turno=fecha_turno,
             hora_turno=hora_turno,
             estado_turno="Confirmado / Sala VIP"
         )
         db.session.add(nuevo_paciente)
-        
+
+    nuevo_turno = TurnoModel(
+        id_paciente=pac_id,
+        token_portal=pac_token,
+        nombre_paciente=nombre,
+        edad=pac_edad,
+        telefono=telefono or pac_tel,
+        programa=pac_prog,
+        medico=medico,
+        fecha_turno=fecha_turno,
+        hora_turno=hora_turno,
+        estado_turno="Confirmado / Sala VIP"
+    )
+    db.session.add(nuevo_turno)
     db.session.commit()
     
     return redirect(url_for('index', token=token, rol='recepcion', seccion='agenda_admision'))
 
-@app.route('/recepcion/editar-paciente/<string:id_paciente>', methods=['GET', 'POST'])
-def editar_paciente_admision(id_paciente):
+@app.route('/recepcion/editar-paciente/<int:turno_id>', methods=['GET', 'POST'])
+def editar_paciente_admision(turno_id):
     token, resp_error = verificar_sesion_y_rol(('recepcion', 'admision', 'secretaria'))
     if not token:
         return resp_error
 
-    p = PacienteModel.query.filter_by(id=id_paciente).first()
-    if not p:
-        return "Paciente no encontrado", 404
+    t = TurnoModel.query.get(turno_id)
+    if not t:
+        return "Turno no encontrado", 404
+
+    p = PacienteModel.query.filter_by(id=t.id_paciente).first()
 
     if request.method == 'POST':
-        p.nombre = request.form.get('nombre', p.nombre).strip()
+        nuevo_nombre = request.form.get('nombre', t.nombre_paciente).strip()
         try:
-            p.edad = int(request.form.get('edad', p.edad))
+            nueva_edad = int(request.form.get('edad', t.edad))
         except (TypeError, ValueError):
-            pass
-        p.telefono = request.form.get('telefono', '').strip()
-        p.fecha_turno = formatear_fecha_turno(request.form.get('fecha_turno', p.fecha_turno or ''))
-        p.hora_turno = request.form.get('hora_turno', p.hora_turno).strip()
-        p.programa = request.form.get('programa', p.programa).strip() or "General"
-        p.medico = request.form.get('medico', p.medico).strip()
+            nueva_edad = t.edad
+        nuevo_tel = request.form.get('telefono', '').strip()
+        nueva_fecha = formatear_fecha_turno(request.form.get('fecha_turno', t.fecha_turno or ''))
+        nueva_hora = request.form.get('hora_turno', t.hora_turno).strip()
+        nuevo_prog = request.form.get('programa', t.programa).strip() or "General"
+        nuevo_med = request.form.get('medico', t.medico).strip()
+
+        t.nombre_paciente = nuevo_nombre
+        t.edad = nueva_edad
+        t.telefono = nuevo_tel
+        t.fecha_turno = nueva_fecha
+        t.hora_turno = nueva_hora
+        t.programa = nuevo_prog
+        t.medico = nuevo_med
+
+        if p:
+            p.nombre = nuevo_nombre
+            p.edad = nueva_edad
+            if nuevo_tel:
+                p.telefono = nuevo_tel
+            if nueva_fecha:
+                p.fecha_turno = nueva_fecha
+            p.hora_turno = nueva_hora
+            p.programa = nuevo_prog
+            p.medico = nuevo_med
+
         db.session.commit()
         rol_actual = session.get(f'rol_base_{token}', 'recepcion')
         return redirect(url_for('index', token=token, rol=rol_actual, seccion='agenda_admision'))
@@ -1285,21 +1388,21 @@ def editar_paciente_admision(id_paciente):
         <div class="box">
             <h2>Editar Turno y Datos de Contacto</h2>
             <form method="POST">
-                <div class="form-group"><label>Nombre y Apellido:</label><input type="text" name="nombre" value="{{ p.nombre }}" required></div>
+                <div class="form-group"><label>Nombre y Apellido:</label><input type="text" name="nombre" value="{{ t.nombre_paciente }}" required></div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group"><label>Edad:</label><input type="number" name="edad" value="{{ p.edad }}" required></div>
-                    <div class="form-group"><label>Teléfono (WhatsApp):</label><input type="text" name="telefono" value="{{ p.telefono or '' }}" placeholder="Ej. 0981123456 o 595981123456"></div>
+                    <div class="form-group"><label>Edad:</label><input type="number" name="edad" value="{{ t.edad }}" required></div>
+                    <div class="form-group"><label>Teléfono (WhatsApp):</label><input type="text" name="telefono" value="{{ t.telefono or '' }}" placeholder="Ej. 0981123456 o 595981123456"></div>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
-                    <div class="form-group"><label>Fecha del Turno:</label><input type="text" name="fecha_turno" value="{{ p.fecha_turno or '' }}" placeholder="DD/MM/AAAA"></div>
-                    <div class="form-group"><label>Hora del Turno:</label><input type="text" name="hora_turno" value="{{ p.hora_turno }}" required></div>
-                    <div class="form-group"><label>Programa:</label><input type="text" name="programa" value="{{ p.programa }}"></div>
+                    <div class="form-group"><label>Fecha del Turno:</label><input type="text" name="fecha_turno" value="{{ t.fecha_turno or '' }}" placeholder="DD/MM/AAAA"></div>
+                    <div class="form-group"><label>Hora del Turno:</label><input type="text" name="hora_turno" value="{{ t.hora_turno }}" required></div>
+                    <div class="form-group"><label>Programa:</label><input type="text" name="programa" value="{{ t.programa }}"></div>
                 </div>
                 <div class="form-group">
                     <label>Médico Tratante / Especialista:</label>
                     <select name="medico">
                         {% for doc in ['Dr. Pedro Calabrese', 'Dra. Fátima López', 'Dra. Romina Espinola', 'Lic. Ximena Ruiz', 'Lic. Belén Romero', 'Dr. Alfredo Estigarribia', 'Manuel Ruiz Vetun'] %}
-                        <option value="{{ doc }}" {% if p.medico == doc %}selected{% endif %}>{{ doc }}</option>
+                        <option value="{{ doc }}" {% if t.medico == doc %}selected{% endif %}>{{ doc }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -1313,17 +1416,17 @@ def editar_paciente_admision(id_paciente):
     </html>
     """
     rol_actual = session.get(f'rol_base_{token}', 'recepcion')
-    return render_template_string(html_editar, p=p, token=token, rol=rol_actual)
+    return render_template_string(html_editar, t=t, token=token, rol=rol_actual)
 
-@app.route('/api/admision/eliminar-paciente/<string:id_paciente>', methods=['POST'])
-def eliminar_paciente_admision(id_paciente):
+@app.route('/api/admision/eliminar-paciente/<int:turno_id>', methods=['POST'])
+def eliminar_paciente_admision(turno_id):
     token, resp_error = verificar_sesion_y_rol(('recepcion', 'admision', 'secretaria'))
     if not token:
         return resp_error
 
-    p = PacienteModel.query.filter_by(id=id_paciente).first()
-    if p:
-        db.session.delete(p)
+    t = TurnoModel.query.get(turno_id)
+    if t:
+        db.session.delete(t)
         db.session.commit()
 
     rol_actual = session.get(f'rol_base_{token}', 'recepcion')
