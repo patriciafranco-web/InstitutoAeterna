@@ -138,10 +138,10 @@
                     <a href="/?token={{ token }}&rol={{ rol }}&seccion=nuevo_paciente" class="btn" style="width: auto; text-decoration: none;">Agendar Nuevo Paciente</a>
                 </div>
                 
-                {% if pacientes %}
+                {% if agenda_items %}
                 <table>
                     <tr><th>Fecha y Hora</th><th>Paciente</th><th>Teléfono</th><th>Edad</th><th>Programa</th><th>Médico Asignado</th><th style="text-align: center;">Acciones & Preconsulta</th></tr>
-                    {% for pat in pacientes %}
+                    {% for pat in agenda_items %}
                     <tr>
                         <td>
                             {% if pat.fecha_turno %}
@@ -157,8 +157,8 @@
                         <td style="text-align: center; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
                             <button class="btn" onclick="enviarWhatsAppPreConsulta('{{ pat.token_portal }}', '{{ pat.nombre }}', '{{ pat.telefono or '' }}')" style="padding: 6px 10px; font-size: 11px; width: auto; background: #25d366; color: #fff;">💬 Enviar Link 360</button>
                             <a href="/recepcion/imprimir-preconsulta/{{ pat.id }}?token={{ token }}" target="_blank" class="btn" style="background: var(--accent); color: white; padding: 6px 10px; font-size: 11px; text-decoration: none; width: auto;">🖨️ Preconsulta</a>
-                            <a href="/recepcion/editar-paciente/{{ pat.id }}?token={{ token }}" class="btn" style="background: #374151; color: white; padding: 6px 10px; font-size: 11px; text-decoration: none; width: auto;">✏️ Editar</a>
-                            <form action="/api/admision/eliminar-paciente/{{ pat.id }}?token={{ token }}" method="POST" style="margin: 0;" onsubmit="return confirm('¿Desea eliminar este turno de la agenda?');">
+                            <a href="/recepcion/editar-paciente/{{ pat.turno_id }}?token={{ token }}" class="btn" style="background: #374151; color: white; padding: 6px 10px; font-size: 11px; text-decoration: none; width: auto;">✏️ Editar</a>
+                            <form action="/api/admision/eliminar-paciente/{{ pat.turno_id }}?token={{ token }}" method="POST" style="margin: 0;" onsubmit="return confirm('¿Desea eliminar este turno de la agenda?');">
                                 <button type="submit" class="btn" style="background: #dc2626; color: white; padding: 6px 10px; font-size: 11px; width: auto;">🗑️</button>
                             </form>
                         </td>
@@ -313,11 +313,11 @@
 
         {% elif seccion == 'agenda_medico' %}
             <div class="box">
-                <h3>Mi Agenda de Turnos de Hoy — {{ nombre_usuario }}</h3>
-                {% if pacientes %}
+                <h3>Mi Agenda de Turnos — {{ nombre_usuario }}</h3>
+                {% if agenda_items %}
                 <table>
                     <tr><th>Fecha y Hora</th><th>Paciente</th><th>Edad</th><th>Programa</th><th>Acción</th></tr>
-                    {% for pat in pacientes %}
+                    {% for pat in agenda_items %}
                     <tr>
                         <td>
                             {% if pat.fecha_turno %}
@@ -335,7 +335,7 @@
                     {% endfor %}
                 </table>
                 {% else %}
-                <p style="text-align: center; color: var(--text-secondary);">No hay turnos agendados para hoy.</p>
+                <p style="text-align: center; color: var(--text-secondary);">No hay turnos agendados para este profesional.</p>
                 {% endif %}
             </div>
 
