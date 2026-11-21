@@ -108,8 +108,8 @@ class PacienteModel(db.Model):
     entrenador = db.Column(db.String(150), default="Manuel Duarte")
     reg_profesional = db.Column(db.String(50), default="MP 4291")
     fecha_turno = db.Column(db.String(20), default="")
-    hora_turno = db.Column(db.String(50), default="09:00 hs")
-    estado_turno = db.Column(db.String(50), default="Confirmado / Sala VIP")
+    hora_turno = db.Column(db.String(50), default="09:00")
+    estado_turno = db.Column(db.String(50), default="Confirmado")
     compromiso = db.Column(db.String(250), default="Pendiente de completar")
     observacion_medica_libre = db.Column(db.Text, default="")
     pre_consulta_json = db.Column(db.Text, nullable=True)
@@ -126,8 +126,8 @@ class TurnoModel(db.Model):
     programa = db.Column(db.String(150), default="General")
     medico = db.Column(db.String(150), nullable=False)
     fecha_turno = db.Column(db.String(20), default="")
-    hora_turno = db.Column(db.String(50), default="09:00 hs")
-    estado_turno = db.Column(db.String(50), default="Confirmado / Sala VIP")
+    hora_turno = db.Column(db.String(50), default="09:00")
+    estado_turno = db.Column(db.String(50), default="Confirmado")
 
 class ConsultaModel(db.Model):
     __tablename__ = 'consultas_historial'
@@ -289,6 +289,7 @@ with app.app_context():
     try:
         if TurnoModel.query.count() == 0 and PacienteModel.query.count() > 0:
             for pac in PacienteModel.query.all():
+                estado_mig = "Confirmado" if (not pac.estado_turno or pac.estado_turno == "Confirmado / Sala VIP") else pac.estado_turno
                 db.session.add(TurnoModel(
                     id_paciente=pac.id,
                     token_portal=pac.token_portal,
@@ -298,8 +299,8 @@ with app.app_context():
                     programa=pac.programa or "General",
                     medico=pac.medico,
                     fecha_turno=pac.fecha_turno or "",
-                    hora_turno=pac.hora_turno or "09:00 hs",
-                    estado_turno=pac.estado_turno or "Confirmado / Sala VIP"
+                    hora_turno=pac.hora_turno or "09:00",
+                    estado_turno=estado_mig
                 ))
             db.session.commit()
     except Exception as mig_turno_err:
@@ -900,6 +901,8 @@ def index():
     agenda_items = []
     for t in turnos_filtrados:
         pac_ref = mapa_pacientes.get(t.id_paciente)
+        estado_raw = t.estado_turno or (pac_ref.estado_turno if pac_ref else "Confirmado")
+        estado_limpio = "Confirmado" if estado_raw == "Confirmado / Sala VIP" else estado_raw
         agenda_items.append({
             "turno_id": t.id,
             "id": t.id_paciente,
@@ -911,7 +914,7 @@ def index():
             "medico": t.medico,
             "fecha_turno": t.fecha_turno or (pac_ref.fecha_turno if pac_ref else ""),
             "hora_turno": t.hora_turno,
-            "estado_turno": t.estado_turno or (pac_ref.estado_turno if pac_ref else "Confirmado / Sala VIP")
+            "estado_turno": estado_limpio
         })
 
     paciente_actual = None
@@ -1005,6 +1008,34 @@ def index():
         mensaje_pfx=mensaje_pfx,
         json=json
     )
+
+@app.route('/medico/atender/<string:id_paciente>')
+def atender_paciente_turno(id_paciente):
+    token, resp_error = verificar_sesion_y_rol(('medico', 'entrenador'))
+    if not token:
+        return resp_error
+
+    turno_id = request.args.get('turno_id', type=int)
+    nombre_usuario = session.get(f'nombre_{token}', '')
+    nombre_limpio = nombre_usuario.replace('Dra.', '').replace('Dr.', '').replace('Lic.', '').split('(')[0].strip()
+
+    if turno_id:
+        t = TurnoModel.query.filter_by(id=turno_id, id_paciente=id_paciente).first()
+        if t:
+            t.estado_turno = "Atendido"
+    else:
+        query_turnos = TurnoModel.query.filter_by(id_paciente=id_paciente)
+        if nombre_limpio:
+            query_turnos = query_turnos.filter(TurnoModel.medico.ilike(f"%{nombre_limpio}%"))
+        for t in query_turnos.all():
+            t.estado_turno = "Atendido"
+
+    pac = PacienteModel.query.filter_by(id=id_paciente).first()
+    if pac:
+        pac.estado_turno = "Atendido"
+
+    db.session.commit()
+    return redirect(url_for('index', token=token, rol='medico', seccion='paciente', id=id_paciente))
 
 # ==========================================
 # REQUERIMIENTO 01: VISTA PRECONSULTA PARA SECRETARÍA (CON OPCIÓN DE IMPRESIÓN Y EDICIÓN)
@@ -1275,7 +1306,7 @@ def agendar_paciente():
     telefono = request.form.get('telefono', '').strip()
     fecha_turno = formatear_fecha_turno(request.form.get('fecha_turno', ''))
     medico = request.form.get('medico', 'Dr. Pedro Calabrese')
-    hora_turno = request.form.get('hora_turno', '09:00 hs')
+    hora_turno = request.form.get('hora_turno', '09:00')
     
     paciente_existente = PacienteModel.query.filter(PacienteModel.nombre.ilike(nombre)).first()
     
@@ -1286,7 +1317,7 @@ def agendar_paciente():
             paciente_existente.fecha_turno = fecha_turno
         paciente_existente.hora_turno = hora_turno
         paciente_existente.medico = medico
-        paciente_existente.estado_turno = "Confirmado / Sala VIP"
+        paciente_existente.estado_turno = "Confirmado"
         pac_id = paciente_existente.id
         pac_token = paciente_existente.token_portal
         pac_edad = paciente_existente.edad
@@ -1308,7 +1339,7 @@ def agendar_paciente():
             medico=medico,
             fecha_turno=fecha_turno,
             hora_turno=hora_turno,
-            estado_turno="Confirmado / Sala VIP"
+            estado_turno="Confirmado"
         )
         db.session.add(nuevo_paciente)
 
@@ -1322,7 +1353,7 @@ def agendar_paciente():
         medico=medico,
         fecha_turno=fecha_turno,
         hora_turno=hora_turno,
-        estado_turno="Confirmado / Sala VIP"
+        estado_turno="Confirmado"
     )
     db.session.add(nuevo_turno)
     db.session.commit()
@@ -1338,7 +1369,6 @@ def actualizar_turno_rapido():
     data = request.get_json(silent=True) or request.form or {}
     turno_id = data.get('turno_id')
     nuevo_estado = (data.get('estado_turno') or '').strip()
-    nuevo_tel = (data.get('telefono') or '').strip()
 
     t = TurnoModel.query.get(turno_id)
     if not t:
@@ -1346,18 +1376,13 @@ def actualizar_turno_rapido():
 
     if nuevo_estado:
         t.estado_turno = nuevo_estado
-    if 'telefono' in data:
-        t.telefono = nuevo_tel
 
     pac = PacienteModel.query.filter_by(id=t.id_paciente).first()
-    if pac:
-        if nuevo_estado:
-            pac.estado_turno = nuevo_estado
-        if 'telefono' in data and nuevo_tel:
-            pac.telefono = nuevo_tel
+    if pac and nuevo_estado:
+        pac.estado_turno = nuevo_estado
 
     db.session.commit()
-    return jsonify({"status": "success", "mensaje": "Turno actualizado."})
+    return jsonify({"status": "success", "estado_turno": t.estado_turno, "mensaje": "Estado actualizado."})
 
 @app.route('/recepcion/editar-paciente/<int:turno_id>', methods=['GET', 'POST'])
 def editar_paciente_admision(turno_id):
@@ -1435,7 +1460,7 @@ def editar_paciente_admision(turno_id):
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
                     <div class="form-group"><label>Fecha del Turno:</label><input type="text" name="fecha_turno" value="{{ t.fecha_turno or '' }}" placeholder="DD/MM/AAAA"></div>
-                    <div class="form-group"><label>Hora del Turno:</label><input type="text" name="hora_turno" value="{{ t.hora_turno }}" required></div>
+                    <div class="form-group"><label>Hora del Turno:</label><input type="time" name="hora_turno" value="{{ t.hora_turno }}" required></div>
                     <div class="form-group"><label>Programa:</label><input type="text" name="programa" value="{{ t.programa }}"></div>
                 </div>
                 <div class="form-group">
